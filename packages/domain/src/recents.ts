@@ -10,12 +10,14 @@ export function deriveRecents(
 ): ItemRef[] {
   const seen = new Set<string>();
   const recents: ItemRef[] = [];
-  for (const entry of entries.toSorted((a, b) => b.createdAt.localeCompare(a.createdAt))) {
+  for (const entry of entries.toSorted(
+    (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+  )) {
+    if (recents.length >= limit) break;
     const key = `${entry.item.type}#${entry.item.id}`;
     if (seen.has(key)) continue;
     seen.add(key);
     recents.push(entry.item);
-    if (recents.length === limit) break;
   }
   return recents;
 }

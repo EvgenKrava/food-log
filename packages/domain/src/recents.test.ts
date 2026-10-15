@@ -39,6 +39,24 @@ describe('deriveRecents', () => {
     expect(recents).toHaveLength(RECENTS_LIMIT);
     expect(recents[0]).toEqual({ type: 'product', id: 'off-4820000000024' });
   });
+
+  it('orders by instant, not by string, when timestamps mix precision', () => {
+    expect(
+      deriveRecents([
+        entry(yogurt, '2026-10-15T08:00:00Z'),
+        entry(dish, '2026-10-15T08:00:00.500Z'),
+      ]),
+    ).toEqual([dish, yogurt]);
+  });
+
+  it('honours a custom limit, including 0', () => {
+    const entries = [
+      entry(yogurt, '2026-10-15T08:00:00.000Z'),
+      entry(dish, '2026-10-15T09:00:00.000Z'),
+    ];
+    expect(deriveRecents(entries, 1)).toEqual([dish]);
+    expect(deriveRecents(entries, 0)).toEqual([]);
+  });
 });
 
 describe('recentsWindow', () => {

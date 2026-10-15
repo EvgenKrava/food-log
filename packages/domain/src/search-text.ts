@@ -1,5 +1,7 @@
-// Shared by the search index (MiniSearch processTerm) and the matching of a user's own items, so
-// both sides normalize text identically.
+// Shared by the search index and the matching of a user's own items, so both normalize text
+// identically. The MiniSearch index must use `tokenize` as its tokenizer (its default splits on
+// punctuation, which would cut "м'ясо" before apostrophes are stripped) and `normalizeSearchText`
+// as its processTerm.
 const APOSTROPHES = /['’ʼ`]/g;
 
 export function normalizeSearchText(text: string): string {
