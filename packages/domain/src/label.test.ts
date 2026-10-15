@@ -116,16 +116,20 @@ describe('normalizeLabel', () => {
   });
 
   it('prefers the scanned barcode, then a valid printed one, and canonicalizes UPC-A', () => {
-    const printed = { ...yogurt, barcode: '4820000000020' };
-    expect(normalizeLabel(printed, '4820000000013')).toMatchObject({
-      draft: { barcode: '4820000000013' },
+    const printed = { ...yogurt, barcode: '4820000000024' };
+    expect(normalizeLabel(printed, '4820000000017')).toMatchObject({
+      draft: { barcode: '4820000000017' },
     });
-    expect(normalizeLabel(printed)).toMatchObject({ draft: { barcode: '4820000000020' } });
+    expect(normalizeLabel(printed)).toMatchObject({ draft: { barcode: '4820000000024' } });
     expect(normalizeLabel({ ...yogurt, barcode: '012345678905' })).toMatchObject({
       draft: { barcode: '0012345678905' },
     });
     const noBarcode = normalizeLabel({ ...yogurt, barcode: 'not a code' });
-    expect(noBarcode.ok && 'barcode' in noBarcode.draft).toBe(false);
+    expect(noBarcode.ok).toBe(true);
+    expect(noBarcode.ok && noBarcode.draft).not.toHaveProperty('barcode');
+    expect(normalizeLabel({ ...yogurt, barcode: '4820000000013' })).not.toHaveProperty(
+      'draft.barcode',
+    );
   });
 
   it.each([
