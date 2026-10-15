@@ -11,3 +11,6 @@ coverage/
 *.tfstate
 *.tfstate.*
 terraform.tfvars
+
+# Google OAuth client secrets — never commit
+client_secret_*.json

@@ -10,7 +10,7 @@ describe('Per100gSchema', () => {
 
   it('tolerates floating-point noise in the macro sum', () => {
     expect(
-      Per100gSchema.safeParse({ kcal: 500, protein: 33.3, fat: 33.3, carbs: 33.4 }).success,
+      Per100gSchema.safeParse({ kcal: 500, protein: 16.1, fat: 48.2, carbs: 35.7 }).success,
     ).toBe(true);
   });
 
