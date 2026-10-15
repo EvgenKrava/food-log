@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BarcodeSchema,
   EanSchema,
   GramsSchema,
   IsoDateSchema,
@@ -41,6 +42,29 @@ describe('EanSchema', () => {
 
   it.each(['1234567', '12345678901', '482000000001X', ' 4820000000013'])('rejects %s', (v) => {
     expect(EanSchema.safeParse(v).success).toBe(false);
+  });
+});
+
+describe('BarcodeSchema', () => {
+  it.each([
+    ['012345678905', '0012345678905'],
+    ['04820000000017', '4820000000017'],
+    ['4820000000017', '4820000000017'],
+    ['12345670', '12345670'],
+    ['14820000000014', '14820000000014'],
+  ])('accepts %s and canonicalizes it to %s', (raw, expected) => {
+    expect(BarcodeSchema.parse(raw)).toBe(expected);
+  });
+
+  it.each(['4820000000013', '012345678904', '12345678', '14820000000010'])(
+    'rejects %s (bad check digit)',
+    (v) => {
+      expect(BarcodeSchema.safeParse(v).success).toBe(false);
+    },
+  );
+
+  it('rejects a non-numeric barcode', () => {
+    expect(BarcodeSchema.safeParse('482000000001X').success).toBe(false);
   });
 });
 

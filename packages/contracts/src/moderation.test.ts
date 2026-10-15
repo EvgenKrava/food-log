@@ -7,7 +7,7 @@ const product = {
   status: 'pending',
   isOwn: false,
   name: 'Сирок глазурований',
-  barcode: '4820000000013',
+  barcode: '4820000000017',
   per100g: { kcal: 413, protein: 8.5, fat: 27.8, carbs: 32 },
   createdAt: '2026-10-15T10:00:00.000Z',
   updatedAt: '2026-10-15T10:00:00.000Z',

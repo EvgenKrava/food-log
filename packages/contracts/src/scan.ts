@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EanSchema, ScanKeySchema } from './common.ts';
+import { BarcodeSchema, ScanKeySchema } from './common.ts';
 import { ProductDraftSchema } from './product.ts';
 
 export const DraftWarningSchema = z.enum([
@@ -29,7 +29,10 @@ export const LabelReadingSchema = z.object({
 });
 export type LabelReading = z.infer<typeof LabelReadingSchema>;
 
-export const ScanRequestSchema = z.object({ key: ScanKeySchema, barcode: EanSchema.optional() });
+export const ScanRequestSchema = z.object({
+  key: ScanKeySchema,
+  barcode: BarcodeSchema.optional(),
+});
 export type ScanRequest = z.infer<typeof ScanRequestSchema>;
 
 export const ScanResponseSchema = z.object({

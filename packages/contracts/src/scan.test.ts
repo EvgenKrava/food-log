@@ -20,7 +20,7 @@ describe('LabelReadingSchema', () => {
 
 describe('ScanRequestSchema', () => {
   it('accepts a scan key with an optional barcode', () => {
-    expect(ScanRequestSchema.safeParse({ key, barcode: '4820000000013' }).success).toBe(true);
+    expect(ScanRequestSchema.safeParse({ key, barcode: '4820000000017' }).success).toBe(true);
   });
 
   it('rejects path traversal in the key', () => {

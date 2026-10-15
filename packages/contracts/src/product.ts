@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  EanSchema,
+  BarcodeSchema,
   GRAMS_MAX,
   IsoDateTimeSchema,
   ModerationStatusSchema,
@@ -13,7 +13,7 @@ import { Per100gSchema } from './nutrients.ts';
 export const ProductFieldsSchema = z.object({
   name: z.string().trim().min(1).max(120),
   brand: z.string().trim().min(1).max(80).optional(),
-  barcode: EanSchema.optional(),
+  barcode: BarcodeSchema.optional(),
   servingSizeG: z.number().positive().max(GRAMS_MAX).optional(),
   per100g: Per100gSchema,
 });
@@ -46,7 +46,7 @@ const optionalAmount = z.number().min(0).optional();
 export const ProductDraftSchema = z.object({
   name: z.string(),
   brand: z.string().optional(),
-  barcode: EanSchema.optional(),
+  barcode: BarcodeSchema.optional(),
   servingSizeG: z.number().positive().optional(),
   per100g: z.object({
     kcal: optionalAmount,

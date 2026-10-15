@@ -7,6 +7,7 @@ const APOSTROPHES = /['’ʼ`]/g;
 export function normalizeSearchText(text: string): string {
   return text
     .normalize('NFKC')
+    .replace(/\p{M}/gu, '')
     .toLowerCase()
     .replace(/ё/g, 'е')
     .replace(APOSTROPHES, '')

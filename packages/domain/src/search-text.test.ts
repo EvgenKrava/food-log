@@ -13,6 +13,14 @@ describe('normalizeSearchText', () => {
   it('applies NFKC (full-width digits become ASCII)', () => {
     expect(normalizeSearchText('Молоко ２.５%')).toBe('молоко 2.5%');
   });
+
+  it('strips combining marks such as a stress accent', () => {
+    expect(normalizeSearchText('Йо\u0301гурт')).toBe('йогурт');
+  });
+
+  it('keeps й as a letter', () => {
+    expect(normalizeSearchText('Йогурт')).toBe('йогурт');
+  });
 });
 
 describe('tokenize', () => {
@@ -27,6 +35,10 @@ describe('tokenize', () => {
 
   it('returns no tokens for punctuation only', () => {
     expect(tokenize(' ,.- ')).toEqual([]);
+  });
+
+  it('ignores a stress accent inside a word', () => {
+    expect(tokenize('йо\u0301гурт')).toEqual(['йогурт']);
   });
 });
 

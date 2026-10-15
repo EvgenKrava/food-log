@@ -10,6 +10,29 @@ export const UlidSchema = z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/, 'must be 
 // EAN-8, UPC-A (12), EAN-13 and GTIN-14 — digits only; canonicalization lives in the domain.
 export const EanSchema = z.string().regex(/^(\d{8}|\d{12,14})$/, 'must be 8 or 12–14 digits');
 
+// GS1 check digit: weights 3,1,3,1… from the rightmost data digit. Catches every single-digit
+// misread.
+export function hasValidGtinCheckDigit(digits: string): boolean {
+  const data = digits.slice(0, -1);
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) {
+    const digit = Number(data[data.length - 1 - i]);
+    sum += i % 2 === 0 ? digit * 3 : digit;
+  }
+  return (10 - (sum % 10)) % 10 === Number(digits.at(-1));
+}
+
+// A real product barcode in canonical form: UPC-A (12 digits) gains a leading 0 and a GTIN-14 with
+// indicator digit 0 drops it, giving the EAN-13 Open Food Facts stores; EAN-8 and other GTIN-14
+// codes stay as they are. Every request that carries a barcode parses through this schema.
+export const BarcodeSchema = EanSchema.refine(hasValidGtinCheckDigit, {
+  message: 'invalid GTIN check digit',
+}).transform((digits) => {
+  if (digits.length === 12) return `0${digits}`;
+  if (digits.length === 14 && digits.startsWith('0')) return digits.slice(1);
+  return digits;
+});
+
 export const OffProductIdSchema = z.string().regex(/^off-(\d{8}|\d{12,14})$/);
 export const ProductIdSchema = z.union([UlidSchema, OffProductIdSchema]);
 

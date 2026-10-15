@@ -12,6 +12,7 @@ describe('normalizeBarcode', () => {
     ['4820-0000-00017', '4820000000017'],
     ['12345670', '12345670'],
     ['14820000000014', '14820000000014'],
+    ['04820000000017', '4820000000017'],
   ])('normalizes %s to %s', (raw, expected) => {
     expect(normalizeBarcode(raw)).toBe(expected);
   });

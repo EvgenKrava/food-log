@@ -91,6 +91,40 @@ describe('applyModeration — author events', () => {
     expect(result).toEqual({ ok: true, state: { status }, content: changed, reindex: false });
   });
 
+  it('keeps the original submittedAt when editing a pending item in place', () => {
+    const result = applyModeration(
+      state({ status: 'pending', submittedAt: AT }),
+      live,
+      { type: 'edit', changes: changed, at: '2026-10-16T10:00:00.000Z' },
+      'author',
+    );
+    expect(result).toEqual({
+      ok: true,
+      state: { status: 'pending', submittedAt: AT },
+      content: changed,
+      reindex: false,
+    });
+  });
+
+  it('replaces an existing revision of an approved item and refreshes submittedAt', () => {
+    const result = applyModeration(
+      state({
+        status: 'approved',
+        pendingRevision: { name: 'old revision' },
+        submittedAt: '2026-10-14T10:00:00.000Z',
+      }),
+      live,
+      { type: 'edit', changes: changed, at: AT },
+      'author',
+    );
+    expect(result).toEqual({
+      ok: true,
+      state: { status: 'approved', pendingRevision: changed, submittedAt: AT },
+      content: live,
+      reindex: false,
+    });
+  });
+
   it('keeps the reject reason when editing a rejected item', () => {
     const result = applyModeration(
       state({ status: 'rejected', rejectReason: 'Wrong kcal' }),

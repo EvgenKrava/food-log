@@ -7,7 +7,7 @@ const SUB = '3f1c9a2e-8b7d-4c6a-9e5f-1a2b3c4d5e6f';
 const valid = {
   name: '  Йогурт персик ',
   brand: 'Галичина',
-  barcode: '4820000000013',
+  barcode: '4820000000017',
   per100g: { kcal: 72, protein: 3.3, fat: 1.3, carbs: 11.3 },
   publish: true,
 };
@@ -34,6 +34,18 @@ describe('CreateProductRequestSchema', () => {
     });
     expect(r.success).toBe(false);
     expect(r.error?.issues[0]?.path).toEqual(['per100g', 'carbs']);
+  });
+
+  it('rejects a barcode with a bad check digit', () => {
+    expect(
+      CreateProductRequestSchema.safeParse({ ...valid, barcode: '4820000000013' }).success,
+    ).toBe(false);
+  });
+
+  it('canonicalizes a UPC-A barcode to EAN-13', () => {
+    expect(CreateProductRequestSchema.parse({ ...valid, barcode: '012345678905' }).barcode).toBe(
+      '0012345678905',
+    );
   });
 
   it('accepts a photoKey from a scan upload', () => {
