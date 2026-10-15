@@ -5,3 +5,7 @@ export * from './barcode.ts';
 export * from './label.ts';
 export * from './targets.ts';
 export * from './moderation.ts';
+export * from './dates.ts';
+export * from './recents.ts';
+export * from './meal.ts';
+export * from './search-text.ts';
