@@ -20,9 +20,9 @@ export class MemoryRepository implements Repository {
       .filter((d) => d.ownerId === ownerId)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
-  readonly entries = new Map<string, { entry: DiaryEntry; expiresAt: number }>();
+  readonly entries = new Map<string, { entry: DiaryEntry; expiresAt: number | undefined }>();
   readonly profiles = new Map<string, Profile>();
-  readonly weights = new Map<string, { entry: WeightEntry; expiresAt: number }>();
+  readonly weights = new Map<string, { entry: WeightEntry; expiresAt: number | undefined }>();
   readonly scanCounts = new Map<string, number>();
 
   async getProduct(id: string) {
@@ -52,7 +52,7 @@ export class MemoryRepository implements Repository {
     const e = this.entries.get(`${uid}#${id}`)?.entry;
     return e && e.date === date ? e : null;
   }
-  async putEntry(uid: string, entry: DiaryEntry, expiresAt: number) {
+  async putEntry(uid: string, entry: DiaryEntry, expiresAt: number | undefined) {
     this.entries.set(`${uid}#${entry.id}`, { entry, expiresAt });
   }
   async deleteEntry(uid: string, _date: IsoDate, id: string) {
@@ -76,7 +76,7 @@ export class MemoryRepository implements Repository {
     const all = await this.listWeights(uid, '0000-01-01', '9999-12-31');
     return all.at(-1) ?? null;
   }
-  async putWeight(uid: string, entry: WeightEntry, expiresAt: number) {
+  async putWeight(uid: string, entry: WeightEntry, expiresAt: number | undefined) {
     this.weights.set(`${uid}#${entry.date}`, { entry, expiresAt });
   }
   async deleteWeight(uid: string, date: IsoDate) {

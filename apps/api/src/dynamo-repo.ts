@@ -172,7 +172,7 @@ export class DynamoRepository implements Repository {
     return res.Item ? strip<DiaryEntry>(res.Item, KEY_ATTRS) : null;
   }
 
-  async putEntry(uid: string, entry: DiaryEntry, expiresAt: number) {
+  async putEntry(uid: string, entry: DiaryEntry, expiresAt: number | undefined) {
     await this.db.send(
       new PutCommand({
         TableName: this.table,
@@ -234,7 +234,7 @@ export class DynamoRepository implements Repository {
     return i ? { date: String(i.date), kg: Number(i.kg) } : null;
   }
 
-  async putWeight(uid: string, entry: WeightEntry, expiresAt: number) {
+  async putWeight(uid: string, entry: WeightEntry, expiresAt: number | undefined) {
     await this.db.send(
       new PutCommand({
         TableName: this.table,

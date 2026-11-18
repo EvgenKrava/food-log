@@ -95,7 +95,7 @@ export function App() {
   else if (path === '/catalog') page = <CatalogPage />;
   else if (path.startsWith('/dishes/')) page = <DishBuilderPage />;
   else if (path === '/stats') page = <StatsPage />;
-  else if (path === '/profile') page = <ProfilePage email={me.data.email} isAdmin={me.data.isAdmin} />;
+  else if (path === '/profile') page = <ProfilePage me={me.data} />;
   else if (path === '/admin' && me.data.isAdmin) page = <AdminPage />;
   else page = <TodayPage />;
 

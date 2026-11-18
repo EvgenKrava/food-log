@@ -56,7 +56,7 @@ export interface Repository {
 
   listEntries(uid: string, from: IsoDate, to: IsoDate): Promise<DiaryEntry[]>;
   getEntry(uid: string, date: IsoDate, id: string): Promise<DiaryEntry | null>;
-  putEntry(uid: string, entry: DiaryEntry, expiresAt: number): Promise<void>;
+  putEntry(uid: string, entry: DiaryEntry, expiresAt: number | undefined): Promise<void>;
   deleteEntry(uid: string, date: IsoDate, id: string): Promise<void>;
 
   getProfile(uid: string): Promise<Profile | null>;
@@ -64,7 +64,7 @@ export interface Repository {
 
   listWeights(uid: string, from: IsoDate, to: IsoDate): Promise<WeightEntry[]>;
   latestWeight(uid: string): Promise<WeightEntry | null>;
-  putWeight(uid: string, entry: WeightEntry, expiresAt: number): Promise<void>;
+  putWeight(uid: string, entry: WeightEntry, expiresAt: number | undefined): Promise<void>;
   deleteWeight(uid: string, date: IsoDate): Promise<void>;
 
   /** Removes every USER#<uid> item (diary, weight, profile). */

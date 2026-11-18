@@ -26,7 +26,7 @@ describe('translations', () => {
 
   for (const locale of LOCALES.filter((l) => l !== 'uk')) {
     it(`has every string in ${locale}`, () => {
-      const missing = [...used].filter((k) => translate(locale, k) === k && !/^[\d\s/]*$/.test(k) && !['Каталог', 'Статистика', 'Назад', 'Перекус', 'Завтра', 'ккал', 'г', 'кг', 'Б', 'Ж', 'Ккал', '/100г', 'На 100 г', 'на 100 г'].includes(k));
+      const missing = [...used].filter((k) => translate(locale, k) === k && !/^[\d\s/]*$/.test(k) && !['Каталог', 'Статистика', 'Назад', 'Перекус', 'Завтра', 'ккал', 'г', 'кг', 'Б', 'Ж', 'Ккал', '/100г', 'На 100 г', 'на 100 г', 'Перейти на Plus', 'План Plus'].includes(k));
       expect(missing).toEqual([]);
     });
   }

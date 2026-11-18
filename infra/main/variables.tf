@@ -23,17 +23,7 @@ variable "lambda_runtime" {
   type        = string
   default     = "nodejs24.x"
 }
-variable "history_days" {
-  description = "How long free users' diary and weight entries are kept (core retention policy)."
-  type        = number
-  default     = 365
-}
 
-variable "scan_limit_per_user" {
-  description = "AI label scans one person may run per UTC day."
-  type        = number
-  default     = 20
-}
 
 variable "scan_limit_global" {
   description = "AI label scans the whole service may run per UTC day (caps the Bedrock bill)."

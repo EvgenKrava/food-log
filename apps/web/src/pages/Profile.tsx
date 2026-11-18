@@ -7,6 +7,7 @@ import { PutProfileRequestSchema, type Activity, type Goal, type Sex } from '@fo
 import { LOCALES, LOCALE_NAMES, tr, useI18n, type Locale } from '../i18n';
 import { api } from '../api';
 import { logoutUrl } from '../auth';
+import type { Me } from '../api';
 import { ErrorNote, Header, Skeleton, kcalText } from '../components';
 import { config } from '../config';
 import { localDate } from '../format';
@@ -20,7 +21,8 @@ const ACTIVITY: Record<Activity, string> = {
 };
 const GOAL: Record<Goal, string> = { lose: 'Схуднути', maintain: 'Тримати вагу', gain: 'Набрати масу' };
 
-export function ProfilePage({ email, isAdmin }: { email: string; isAdmin: boolean }) {
+export function ProfilePage({ me }: { me: Me }) {
+  const { email, isAdmin } = me;
   const auth = useAuth();
   const { locale, setLocale } = useI18n();
   const qc = useQueryClient();
@@ -167,6 +169,21 @@ export function ProfilePage({ email, isAdmin }: { email: string; isAdmin: boolea
             </select>
           </label>
           <p className="ot-text">{email}</p>
+          <div className={`ot-card ${me.plan === 'plus' ? 'ot-card--accent' : 'ot-card--flat'}`}>
+            <p className="ot-h3">{me.plan === 'plus' ? tr('План Plus') : tr('Безкоштовний план')}</p>
+            <p className="ot-text">
+              {me.limits.labelScansPerDay === null
+                ? tr('Скани етикеток без обмежень')
+                : tr('{n} сканів етикеток на день', { n: String(me.limits.labelScansPerDay) })}
+              {' · '}
+              {me.limits.historyDays === null
+                ? tr('історія без обмежень')
+                : tr('історія за {n} днів', { n: String(me.limits.historyDays) })}
+            </p>
+            {me.plan === 'free' && (
+              <a className="ot-btn self-start" href={me.upgradeUrl}>{tr('Перейти на Plus')}</a>
+            )}
+          </div>
           {isAdmin && (
             <a className="ot-btn ot-btn--outline" href="/admin" onClick={(e) => { e.preventDefault(); navigate('/admin'); }}>
               <ShieldCheck className="ot-icon" />{tr('Модерація каталогу')}

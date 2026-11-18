@@ -52,6 +52,7 @@ import {
   summarizeDay,
   sumNutrients,
 } from '@foodlog/domain';
+import { DEFAULT_PLAN_LIMITS, UPGRADE_URL, limitsFor, type PlanLimits } from './plans.ts';
 import { ACCESS_GROUP, ADMIN_GROUP, claimsFrom, type AuthUser } from './auth.ts';
 import type {
   Clock,
@@ -68,8 +69,8 @@ export type Deps = {
   repo: Repository;
   off: FoodFacts;
   clock: Clock;
-  /** Days a diary entry or weight entry is kept for free users (core retention policy: 12 months). */
-  historyDays: number;
+  /** Free/Plus limits (SSM /onlytools/plans/limits in production). */
+  planLimits?: () => Promise<PlanLimits>;
   /** Reads label photos; scanning answers UPSTREAM_UNAVAILABLE without it. */
   labels?: LabelReader;
   scanLimits?: ScanLimits;
@@ -79,7 +80,8 @@ export type Deps = {
 
 type Env = { Variables: { user: AuthUser } };
 
-export const DEFAULT_SCAN_LIMITS: ScanLimits = { perUser: 20, global: 300 };
+/** perUser here is only a fallback; the plan decides it per request. */
+export const DEFAULT_SCAN_LIMITS: ScanLimits = { perUser: 3, global: 300 };
 
 const fail = (code: ErrorCode, message: string, details?: unknown): never => {
   throw new DomainError(code, message, details);
@@ -183,7 +185,14 @@ export function createApp(deps: Deps) {
   const { repo, off, clock } = deps;
   const identify = deps.identify ?? ((c: Context) => claimsFrom(c.env?.event));
   const nowIso = () => clock().toISOString();
-  const expiresAt = () => Math.floor(clock().getTime() / 1000) + deps.historyDays * 86_400;
+  const planLimits = deps.planLimits ?? (() => Promise.resolve(DEFAULT_PLAN_LIMITS));
+  const limitsOf = async (u: AuthUser) => limitsFor(u.groups, await planLimits());
+  /** Free history expires `historyDays` after the entry's own date; Plus history has no TTL. */
+  const expiresFor = async (u: AuthUser, date: IsoDate): Promise<number | undefined> => {
+    const { historyDays } = await limitsOf(u);
+    if (historyDays === null) return undefined;
+    return Math.floor(Date.parse(`${date}T00:00:00Z`) / 1000) + historyDays * 86_400;
+  };
   const today = () => nowIso().slice(0, 10);
 
   /** Looks a product up locally, then in Open Food Facts for `off-<ean>` ids (cached on first use). */
@@ -259,9 +268,13 @@ export function createApp(deps: Deps) {
     return next();
   });
 
-  app.get('/me', (c) => {
+  app.get('/me', async (c) => {
     const u = c.get('user');
+    const limits = await limitsOf(u);
     return c.json({
+      plan: limits.plan,
+      limits: { labelScansPerDay: limits.labelScansPerDay, historyDays: limits.historyDays },
+      upgradeUrl: UPGRADE_URL,
       email: u.email,
       hasAccess: u.groups.includes(ACCESS_GROUP) || u.groups.includes(ADMIN_GROUP),
       isAdmin: u.groups.includes(ADMIN_GROUP),
@@ -317,7 +330,7 @@ export function createApp(deps: Deps) {
     const date = parse(IsoDateSchema, c.req.param('date'));
     const { kg } = parse(PutWeightRequestSchema, await c.req.json());
     const entry = { date, kg };
-    await repo.putWeight(c.get('user').sub, entry, expiresAt());
+    await repo.putWeight(c.get('user').sub, entry, await expiresFor(c.get('user'), date));
     return c.json(entry);
   });
 
@@ -360,7 +373,7 @@ export function createApp(deps: Deps) {
       nutrients: scaleNutrients(source.per100g, req.grams),
       createdAt: nowIso(),
     };
-    await repo.putEntry(uid, entry, expiresAt());
+    await repo.putEntry(uid, entry, await expiresFor(c.get('user'), date));
     return c.json(entry, 201);
   });
 
@@ -377,7 +390,7 @@ export function createApp(deps: Deps) {
       grams,
       nutrients: scaleNutrients(entry.per100g, grams),
     };
-    await repo.putEntry(uid, updated, expiresAt());
+    await repo.putEntry(uid, updated, await expiresFor(c.get('user'), date));
     return c.json(updated);
   });
 
@@ -597,10 +610,18 @@ export function createApp(deps: Deps) {
   app.post('/scans', async (c) => {
     const req = parse(ScanImageRequestSchema, await c.req.json().catch(() => null));
     if (!deps.labels) return fail('UPSTREAM_UNAVAILABLE', 'label scanning is not configured');
-    const limits = deps.scanLimits ?? DEFAULT_SCAN_LIMITS;
+    const user = c.get('user');
+    const { plan, labelScansPerDay } = await limitsOf(user);
+    const service = deps.scanLimits ?? DEFAULT_SCAN_LIMITS;
+    // The plan sets the per-person limit; the service-wide cap still bounds the Bedrock bill.
+    const limits = { perUser: labelScansPerDay ?? service.global, global: service.global };
     const twoDays = Math.floor(clock().getTime() / 1000) + 2 * 86_400;
-    if (!(await repo.consumeScanQuota(c.get('user').sub, today(), limits, twoDays))) {
-      return fail('QUOTA_EXCEEDED', 'daily scan limit reached', { perUser: limits.perUser });
+    if (!(await repo.consumeScanQuota(user.sub, today(), limits, twoDays))) {
+      return fail('QUOTA_EXCEEDED', 'daily scan limit reached', {
+        plan,
+        limit: labelScansPerDay,
+        ...(plan === 'free' ? { upgradeUrl: UPGRADE_URL } : {}),
+      });
     }
     const reading = await deps.labels.read({ data: req.image, mediaType: req.mediaType });
     const result = normalizeLabel(reading, req.barcode);

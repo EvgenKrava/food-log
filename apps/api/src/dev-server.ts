@@ -11,13 +11,17 @@ const app = createApp({
   repo: new MemoryRepository(),
   off: new HttpFoodFacts(),
   clock: () => new Date(),
-  historyDays: 365,
   labels: new BedrockLabelReader(process.env.LABEL_MODEL || undefined),
   identify: () => ({
     sub: '00000000-0000-4000-8000-000000000001',
     email: 'dev@localhost',
     // DEV_ADMIN=1 also makes the test user a catalog moderator.
-    groups: process.env.DEV_ADMIN === '1' ? ['foodlog-user', 'foodlog-admin'] : ['foodlog-user'],
+    // DEV_PLUS=1 puts the test user on Plus.
+    groups: [
+      'foodlog-user',
+      ...(process.env.DEV_ADMIN === '1' ? ['foodlog-admin'] : []),
+      ...(process.env.DEV_PLUS === '1' ? ['plus'] : []),
+    ],
   }),
 });
 

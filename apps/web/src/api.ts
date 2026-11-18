@@ -22,10 +22,12 @@ import type {
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
-  constructor(status: number, code: string, message: string) {
+  readonly details: unknown;
+  constructor(status: number, code: string, message: string, details?: unknown) {
     super(message);
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -47,16 +49,24 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   });
   if (res.status === 401) tokens.onUnauthorized();
   if (res.status === 204) return undefined as T;
-  const data = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
+  const data = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string; details?: unknown } } | null;
   if (!res.ok) {
-    throw new ApiError(res.status, data?.error?.code ?? 'INTERNAL', data?.error?.message ?? tr('Помилка сервера'));
+    throw new ApiError(res.status, data?.error?.code ?? 'INTERNAL', data?.error?.message ?? tr('Помилка сервера'), data?.error?.details);
   }
   return data as T;
 }
 
 export type CatalogKind = 'products' | 'dishes';
 
-export type Me = { email: string; hasAccess: boolean; isAdmin: boolean };
+export type Me = {
+  email: string;
+  hasAccess: boolean;
+  isAdmin: boolean;
+  plan: 'free' | 'plus';
+  /** null = unlimited */
+  limits: { labelScansPerDay: number | null; historyDays: number | null };
+  upgradeUrl: string;
+};
 
 export const api = {
   me: () => request<Me>('GET', '/me'),

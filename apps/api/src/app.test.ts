@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
+import { cachedPlanLimits, DEFAULT_PLAN_LIMITS } from './plans.ts';
 import type { AuthUser } from './auth.ts';
 import { MemoryRepository } from './memory-repo.ts';
 import type { FoodFacts, LabelImage, LabelReader, OffProduct } from './ports.ts';
@@ -37,7 +38,10 @@ function setup(user: AuthUser | null = ALICE) {
     repo,
     off,
     clock: () => new Date('2026-11-18T09:00:00Z'),
-    historyDays: 365,
+    planLimits: async () => ({
+      plusGroup: 'plus',
+      apps: { foodlog: { labelScansPerDay: { free: 2, plus: 4 }, historyDays: { free: 90, plus: null } } },
+    }),
     identify: () => current,
     labels,
     scanLimits: { perUser: 2, global: 3 },
@@ -133,7 +137,7 @@ describe('access', () => {
 });
 
 describe('diary', () => {
-  it('logs an Open Food Facts product, snapshots values and keeps history for a year', async () => {
+  it('logs an Open Food Facts product, snapshots values and keeps free history for 90 days', async () => {
     const { call, repo } = setup();
     const created = await call('POST', '/diary/2026-11-18/entries', {
       meal: 'breakfast',
@@ -144,7 +148,7 @@ describe('diary', () => {
     expect(created.body.nutrients.kcal).toBeCloseTo(510);
     expect(repo.products.get(`off-${BUCKWHEAT.barcode}`)?.source).toBe('off');
     const [stored] = [...repo.entries.values()];
-    expect(stored?.expiresAt).toBe(Date.parse('2026-11-18T09:00:00Z') / 1000 + 365 * 86400);
+    expect(stored?.expiresAt).toBe(Date.parse('2026-11-18T00:00:00Z') / 1000 + 90 * 86400);
 
     const day = await call('GET', '/diary/2026-11-18');
     expect(day.body.entries).toHaveLength(1);
@@ -397,5 +401,48 @@ describe('moderation', () => {
     expect((await call('DELETE', '/me')).status).toBe(204);
     expect(repo.products.get(p.id)?.ownerId).toBeUndefined();
     expect(repo.products.get(p.id)?.status).toBe('approved');
+  });
+});
+
+describe('plans', () => {
+  const PLUS: AuthUser = { ...ALICE, groups: ['foodlog-user', 'plus'] };
+  const entry = { item: { type: 'product', id: `off-${BUCKWHEAT.barcode}` }, grams: 100, meal: 'lunch' };
+
+  it('keeps free history 90 days from the entry date and Plus history forever', async () => {
+    const { call, as, repo } = setup();
+    const free = (await call('POST', '/diary/2026-11-10/entries', entry)).body;
+    expect(repo.entries.get(`${ALICE.sub}#${free.id}`)?.expiresAt).toBe(Date.parse('2026-11-10T00:00:00Z') / 1000 + 90 * 86_400);
+    as(PLUS);
+    const plus = (await call('POST', '/diary/2026-11-10/entries', entry)).body;
+    expect(repo.entries.get(`${ALICE.sub}#${plus.id}`)?.expiresAt).toBeUndefined();
+  });
+
+  it('tells the client its plan and limits', async () => {
+    const { call, as } = setup();
+    expect((await call('GET', '/me')).body).toMatchObject({ plan: 'free', limits: { labelScansPerDay: 2, historyDays: 90 } });
+    as(PLUS);
+    expect((await call('GET', '/me')).body).toMatchObject({ plan: 'plus', limits: { labelScansPerDay: 4, historyDays: null } });
+  });
+
+  it('gives Plus more scans and offers free users the upgrade', async () => {
+    const { call, as } = setup({ ...ALICE, groups: ['foodlog-user', 'plus'] });
+    for (let i = 0; i < 3; i++) expect((await call('POST', '/scans', IMAGE)).status).toBe(200);
+    as(BOB);
+    // The service-wide cap (3 in this setup) is reached, whatever the plan.
+    expect((await call('POST', '/scans', IMAGE)).status).toBe(429);
+  });
+
+  it('includes the upgrade link when a free user hits the limit', async () => {
+    const { call } = setup();
+    await call('POST', '/scans', IMAGE);
+    await call('POST', '/scans', IMAGE);
+    const r = await call('POST', '/scans', IMAGE);
+    expect(r.body.error.details).toEqual({ plan: 'free', limit: 2, upgradeUrl: 'https://onlytools.click/plus/' });
+  });
+
+  it('falls back to the defaults when the parameter is missing or malformed', async () => {
+    expect(await cachedPlanLimits(async () => undefined)()).toEqual(DEFAULT_PLAN_LIMITS);
+    expect(await cachedPlanLimits(async () => '{"nope":1}')()).toEqual(DEFAULT_PLAN_LIMITS);
+    expect(await cachedPlanLimits(() => Promise.reject(new Error('denied')))()).toEqual(DEFAULT_PLAN_LIMITS);
   });
 });

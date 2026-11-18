@@ -36,6 +36,11 @@ data "aws_iam_policy_document" "api" {
     ]
     resources = [aws_dynamodb_table.main.arn, "${aws_dynamodb_table.main.arn}/index/*"]
   }
+  # Free/Plus limits published by the payments service.
+  statement {
+    actions   = ["ssm:GetParameter"]
+    resources = ["arn:aws:ssm:${var.region}:${local.account_id}:parameter/onlytools/plans/limits"]
+  }
   # Label scans: Haiku through the InvokeModel stack (cross-region inference profile).
   statement {
     actions = ["bedrock:InvokeModel"]
@@ -64,10 +69,8 @@ resource "aws_lambda_function" "api" {
   memory_size = 512
   environment {
     variables = {
-      TABLE_NAME          = aws_dynamodb_table.main.name
-      HISTORY_DAYS        = tostring(var.history_days)
-      SCAN_LIMIT_PER_USER = tostring(var.scan_limit_per_user)
-      SCAN_LIMIT_GLOBAL   = tostring(var.scan_limit_global)
+      TABLE_NAME        = aws_dynamodb_table.main.name
+      SCAN_LIMIT_GLOBAL = tostring(var.scan_limit_global)
     }
   }
   depends_on = [aws_cloudwatch_log_group.api]

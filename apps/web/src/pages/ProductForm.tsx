@@ -29,7 +29,14 @@ const warningText = (w: DraftWarning): string =>
     OUT_OF_RANGE: tr('Деякі числа виглядають дивно: звірте з етикеткою'),
   })[w];
 
+function upgradeLink(err: unknown): string | undefined {
+  if (!(err instanceof ApiError) || err.code !== 'QUOTA_EXCEEDED') return undefined;
+  const d = err.details as { upgradeUrl?: unknown } | undefined;
+  return typeof d?.upgradeUrl === 'string' ? d.upgradeUrl : undefined;
+}
+
 function scanErrorText(err: unknown): string {
+  if (upgradeLink(err)) return tr('На безкоштовному плані {n} скани на день, і вони на сьогодні закінчились. Введіть дані вручну або перейдіть на Plus.', { n: String((err as ApiError & { details: { limit: number } }).details.limit) });
   if (err instanceof ApiError && err.code === 'QUOTA_EXCEEDED') return tr('Ліміт сканувань на сьогодні вичерпано. Введіть дані вручну.');
   if (err instanceof ApiError && err.code === 'SCAN_UNREADABLE') return tr('Не вдалося прочитати етикетку. Сфотографуйте ближче і рівніше.');
   return tr('Сканування зараз недоступне. Введіть дані вручну.');
@@ -133,7 +140,12 @@ export function ProductFormPage() {
             }}
           />
           {scan.isError ? (
-            <p className="ot-chip ot-chip--bad self-start">{scanErrorText(scan.error)}</p>
+            <>
+              <p className="ot-chip ot-chip--bad self-start">{scanErrorText(scan.error)}</p>
+              {upgradeLink(scan.error) && (
+                <a className="ot-btn ot-btn--sm self-start" href={upgradeLink(scan.error)}>{tr('Перейти на Plus')}</a>
+              )}
+            </>
           ) : scan.isSuccess ? (
             <p className="ot-hint">{tr('Дані прочитав ШІ. Звірте з етикеткою перед збереженням.')}</p>
           ) : (
