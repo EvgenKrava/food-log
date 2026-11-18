@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 
@@ -37,8 +38,8 @@ export function Scanner({ onCode, onClose }: { onCode: (code: string) => void; o
         void tick();
       } catch (e) {
         setError(e instanceof DOMException && e.name === 'NotAllowedError'
-          ? 'Немає доступу до камери. Дозвольте його в налаштуваннях браузера.'
-          : 'Не вдалося увімкнути камеру.');
+          ? tr('Немає доступу до камери. Дозвольте його в налаштуваннях браузера.')
+          : tr('Не вдалося увімкнути камеру.'));
       }
     })();
     return () => {
@@ -55,8 +56,8 @@ export function Scanner({ onCode, onClose }: { onCode: (code: string) => void; o
         <div className="h-40 w-72 rounded-3xl border-4 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" />
       </div>
       <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 16px)' }}>
-        <span className="font-extrabold">Наведіть на штрихкод</span>
-        <button className="ot-btn ot-btn--icon ot-btn--outline" aria-label="Закрити" onClick={onClose}><X className="ot-icon" /></button>
+        <span className="font-extrabold">{tr('Наведіть на штрихкод')}</span>
+        <button className="ot-btn ot-btn--icon ot-btn--outline" aria-label={tr('Закрити')} onClick={onClose}><X className="ot-icon" /></button>
       </div>
       {error && <p className="absolute inset-x-4 bottom-10 rounded-2xl bg-black/80 p-4 text-center font-bold">{error}</p>}
     </div>

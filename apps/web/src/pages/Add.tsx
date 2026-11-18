@@ -1,3 +1,4 @@
+import { tr } from '../i18n';
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, PackagePlus, ScanBarcode, Search, Star } from 'lucide-react';
@@ -36,7 +37,7 @@ export function AddPage() {
       api.barcode(code).then(setPicked, (e: unknown) => {
         if (e instanceof ApiError && e.status === 404) {
           navigate(`/products/new?date=${date}${meal ? `&meal=${meal}` : ''}&barcode=${code}`);
-        } else if (e instanceof ApiError && e.code === 'VALIDATION') setScanError(new Error(`Штрихкод ${code} не схожий на товарний. Спробуйте ще раз.`));
+        } else if (e instanceof ApiError && e.code === 'VALIDATION') setScanError(new Error(tr('Штрихкод {code} не схожий на товарний. Спробуйте ще раз.', { code })));
         else setScanError(e);
       });
     },
@@ -47,19 +48,19 @@ export function AddPage() {
 
   return (
     <>
-      <Header title="Додати їжу" left={<button className="ot-btn ot-btn--ghost ot-btn--icon" aria-label="Назад" onClick={back}><ArrowLeft className="ot-icon" /></button>} />
+      <Header title={tr('Додати їжу')} left={<button className="ot-btn ot-btn--ghost ot-btn--icon" aria-label={tr('Назад')} onClick={back}><ArrowLeft className="ot-icon" /></button>} />
       <div className="ot-content">
         <div className="flex gap-2">
           <label className="ot-search flex-1">
             <Search className="ot-icon" />
-            <input className="ot-input" type="search" autoFocus placeholder="Назва продукту або штрихкод" value={text} onChange={(e) => setText(e.target.value)} />
+            <input className="ot-input" type="search" autoFocus placeholder={tr('Назва продукту або штрихкод')} value={text} onChange={(e) => setText(e.target.value)} />
           </label>
-          <button className="ot-btn ot-btn--soft ot-btn--icon" style={{ minHeight: 48, width: 48 }} aria-label="Сканувати штрихкод" onClick={() => setScanning(true)}>
+          <button className="ot-btn ot-btn--soft ot-btn--icon" style={{ minHeight: 48, width: 48 }} aria-label={tr('Сканувати штрихкод')} onClick={() => setScanning(true)}>
             <ScanBarcode className="ot-icon" />
           </button>
         </div>
         <ErrorNote error={results.error ?? scanError} />
-        {!q && <p className="ot-caption px-1">Нещодавні</p>}
+        {!q && <p className="ot-caption px-1">{tr('Нещодавні')}</p>}
         <div className="ot-list">
           {results.isLoading && <><Skeleton /><Skeleton /><Skeleton /></>}
           {results.data?.items.map((item) => (
@@ -70,22 +71,22 @@ export function AddPage() {
                   {item.brand ? `${item.brand} · ` : ''}<MacroLine n={item.per100g} />
                 </span>
               </span>
-              {item.isOwn && <Star className="ot-icon text-[var(--ot-accent)]" aria-label="Мій продукт" />}
-              <span className="ot-row__value">{kcal(item.per100g.kcal)}<span className="ot-caption"> /100г</span></span>
+              {item.isOwn && <Star className="ot-icon text-[var(--ot-accent)]" aria-label={tr('Мій продукт')} />}
+              <span className="ot-row__value">{kcal(item.per100g.kcal)}<span className="ot-caption"> {tr('/100г')}</span></span>
             </button>
           ))}
           {results.data && results.data.items.length === 0 && (
-            <p className="ot-text px-1">{q ? 'Нічого не знайдено.' : 'Тут з’являться продукти, які ви нещодавно додавали.'}</p>
+            <p className="ot-text px-1">{q ? tr('Нічого не знайдено.') : tr('Тут з’являться продукти, які ви нещодавно додавали.')}</p>
           )}
           <a className="ot-row ot-row--empty" href={newProduct} onClick={(e) => { e.preventDefault(); navigate(newProduct); }}>
             <span className="ot-row__icon"><PackagePlus className="ot-icon" /></span>
             <span className="ot-row__body">
-              <span className="ot-row__title">Створити свій продукт</span>
-              <span className="ot-row__sub">Введіть калорії та БЖУ з етикетки</span>
+              <span className="ot-row__title">{tr('Створити свій продукт')}</span>
+              <span className="ot-row__sub">{tr('Введіть калорії та БЖУ з етикетки')}</span>
             </span>
           </a>
         </div>
-        <p className="ot-caption px-1">Дані про продукти: Open Food Facts (ODbL).</p>
+        <p className="ot-caption px-1">{tr('Дані про продукти: Open Food Facts (ODbL).')}</p>
       </div>
       {scanning && (
         <Suspense fallback={null}>

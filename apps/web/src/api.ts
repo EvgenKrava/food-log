@@ -1,3 +1,4 @@
+import { tr } from './i18n';
 import type {
   CatalogItem,
   CreateDiaryEntryRequest,
@@ -42,7 +43,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (res.status === 204) return undefined as T;
   const data = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
   if (!res.ok) {
-    throw new ApiError(res.status, data?.error?.code ?? 'INTERNAL', data?.error?.message ?? 'Помилка сервера');
+    throw new ApiError(res.status, data?.error?.code ?? 'INTERNAL', data?.error?.message ?? tr('Помилка сервера'));
   }
   return data as T;
 }

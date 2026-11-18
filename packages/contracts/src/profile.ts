@@ -10,7 +10,7 @@ export type Activity = z.infer<typeof ActivitySchema>;
 export const GoalSchema = z.enum(['lose', 'maintain', 'gain']);
 export type Goal = z.infer<typeof GoalSchema>;
 
-export const LocaleSchema = z.enum(['uk', 'en']);
+export const LocaleSchema = z.enum(['uk', 'en', 'ru']);
 export type Locale = z.infer<typeof LocaleSchema>;
 
 export const AGE_MIN = 13;

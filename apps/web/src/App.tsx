@@ -1,3 +1,4 @@
+import { tr } from './i18n';
 import { useEffect, useRef } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { useQuery } from '@tanstack/react-query';
@@ -43,51 +44,39 @@ export function App() {
     else go();
   }, [signedOut, auth]);
 
-  // Signed-in screens stay out of search results.
-  useEffect(() => {
-    if (!auth.isAuthenticated) return;
-    let meta = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
-    if (!meta) {
-      meta = document.createElement('meta');
-      meta.name = 'robots';
-      document.head.appendChild(meta);
-    }
-    meta.content = 'noindex, nofollow';
-  }, [auth.isAuthenticated]);
-
   const me = useQuery({ queryKey: ['me'], queryFn: api.me, enabled: auth.isAuthenticated });
 
   if (auth.error && !auth.isAuthenticated) {
     return (
       <Centered>
         <div className="ot-card max-w-sm">
-          <p className="ot-h3">Не вдалося увійти</p>
+          <p className="ot-h3">{tr('Не вдалося увійти')}</p>
           <p className="ot-text">{auth.error.message}</p>
-          <button className="ot-btn" onClick={() => void auth.signinRedirect()}>Спробувати ще раз</button>
+          <button className="ot-btn" onClick={() => void auth.signinRedirect()}>{tr('Спробувати ще раз')}</button>
         </div>
       </Centered>
     );
   }
   if (!auth.isAuthenticated || !me.data) {
-    return <Centered><p className="ot-muted">Завантаження…</p></Centered>;
+    return <Centered><p className="ot-muted">{tr('Завантаження…')}</p></Centered>;
   }
   if (!me.data.hasAccess) {
     return (
       <Centered>
         <div className="ot-card max-w-sm">
-          <p className="ot-h3">FoodLog поки недоступний для вашого акаунта</p>
-          <p className="ot-text">Попросіть адміністратора Only Tools відкрити доступ.</p>
-          <a className="ot-btn" href={config.hubUrl}>До Only Tools</a>
+          <p className="ot-h3">{tr('FoodLog поки недоступний для вашого акаунта')}</p>
+          <p className="ot-text">{tr('Попросіть адміністратора Only Tools відкрити доступ.')}</p>
+          <a className="ot-btn" href={config.hubUrl}>{tr('До Only Tools')}</a>
         </div>
       </Centered>
     );
   }
 
   const tabs = [
-    { to: '/', label: 'Сьогодні', icon: CalendarDays },
-    { to: '/catalog', label: 'Каталог', icon: BookOpen },
-    { to: '/stats', label: 'Статистика', icon: BarChart3 },
-    { to: '/profile', label: 'Профіль', icon: User },
+    { to: '/', label: tr('Сьогодні'), icon: CalendarDays },
+    { to: '/catalog', label: tr('Каталог'), icon: BookOpen },
+    { to: '/stats', label: tr('Статистика'), icon: BarChart3 },
+    { to: '/profile', label: tr('Профіль'), icon: User },
   ];
   const isActive = (to: string) => (to === '/' ? path === '/' : path.startsWith(to));
   const link = (to: string) => (e: React.MouseEvent) => {
@@ -113,15 +102,15 @@ export function App() {
   return (
     <div className="ot-shell">
       <div className="ot-layout">
-        <nav className="ot-nav" aria-label="Розділи">
+        <nav className="ot-nav" aria-label={tr('Розділи')}>
           <a className="ot-nav__brand ot-brand" href={config.hubUrl}>
             <span className="ot-logo"><i /><i /><i /><i /></span>
             <span>FoodLog</span>
           </a>
           {tabs.slice(0, 2).map(navItem)}
-          <a className="ot-nav__add" href="/add" onClick={link('/add')} aria-label="Додати їжу">
+          <a className="ot-nav__add" href="/add" onClick={link('/add')} aria-label={tr('Додати їжу')}>
             <span className="ot-fab"><Plus className="ot-icon" /></span>
-            <span className="ot-btn ot-btn--block"><Plus className="ot-icon" />Додати їжу</span>
+            <span className="ot-btn ot-btn--block"><Plus className="ot-icon" />{tr('Додати їжу')}</span>
           </a>
           {tabs.slice(2).map(navItem)}
           <span className="ot-nav__spacer" />

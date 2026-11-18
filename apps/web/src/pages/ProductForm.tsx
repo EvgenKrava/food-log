@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
 import { CreateProductRequestSchema, MealSchema, type Product } from '@foodlog/contracts';
 import { hasKcalMismatch, kcalFromMacros } from '@foodlog/domain';
+import { tr } from '../i18n';
 import { api } from '../api';
 import { ErrorNote, Header } from '../components';
 import { kcal as fmtKcal, localDate } from '../format';
@@ -44,7 +45,7 @@ export function ProductFormPage() {
 
   const save = useMutation({
     mutationFn: () => {
-      if (!parsed.success) throw new Error('Перевірте поля');
+      if (!parsed.success) throw new Error(tr('Перевірте поля'));
       return api.createProduct(parsed.data);
     },
     onSuccess: (p) => {
@@ -65,31 +66,31 @@ export function ProductFormPage() {
 
   return (
     <>
-      <Header title="Новий продукт" left={<button className="ot-btn ot-btn--ghost ot-btn--icon" aria-label="Назад" onClick={back}><ArrowLeft className="ot-icon" /></button>} />
+      <Header title={tr('Новий продукт')} left={<button className="ot-btn ot-btn--ghost ot-btn--icon" aria-label={tr('Назад')} onClick={back}><ArrowLeft className="ot-icon" /></button>} />
       <form className="ot-content" onSubmit={(e) => { e.preventDefault(); if (parsed.success) save.mutate(); }}>
         <div className="ot-card">
-          {field('name', 'Назва', { placeholder: 'Наприклад, Сир кисломолочний 5%' })}
-          {field('brand', 'Виробник (необовʼязково)')}
-          {field('barcode', 'Штрихкод (необовʼязково)', { decimal: true })}
+          {field('name', tr('Назва'), { placeholder: tr('Наприклад, Сир кисломолочний 5%') })}
+          {field('brand', tr('Виробник (необовʼязково)'))}
+          {field('barcode', tr('Штрихкод (необовʼязково)'), { decimal: true })}
         </div>
         <div className="ot-card">
-          <p className="ot-label">На 100 г</p>
+          <p className="ot-label">{tr('На 100 г')}</p>
           <div className="grid grid-cols-2 gap-3">
-            {field('kcal', 'Ккал', { decimal: true })}
-            {field('protein', 'Білки, г', { decimal: true })}
-            {field('fat', 'Жири, г', { decimal: true })}
-            {field('carbs', 'Вуглеводи, г', { decimal: true })}
+            {field('kcal', tr('Ккал'), { decimal: true })}
+            {field('protein', tr('Білки, г'), { decimal: true })}
+            {field('fat', tr('Жири, г'), { decimal: true })}
+            {field('carbs', tr('Вуглеводи, г'), { decimal: true })}
           </div>
           {mismatch && (
             <p className="ot-chip ot-chip--warn self-start">
-              За БЖУ виходить ≈{fmtKcal(kcalFromMacros(parsed.data.per100g))} ккал. Перевірте етикетку.
+              {tr('За БЖУ виходить ≈{kcal} ккал. Перевірте етикетку.', { kcal: fmtKcal(kcalFromMacros(parsed.data.per100g)) })}
             </p>
           )}
-          {field('serving', 'Порція, г (необовʼязково)', { decimal: true })}
+          {field('serving', tr('Порція, г (необовʼязково)'), { decimal: true })}
         </div>
         <ErrorNote error={save.error} />
         <button className="ot-btn ot-btn--block" type="submit" disabled={!parsed.success || save.isPending}>
-          {save.isPending ? 'Зберігаю…' : 'Зберегти'}
+          {save.isPending ? tr('Зберігаю…') : tr('Зберегти')}
         </button>
       </form>
       {created && date && (

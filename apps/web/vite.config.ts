@@ -9,7 +9,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['only-tools.css', 'icon.svg', 'robots.txt', 'sitemap.xml'],
+      includeAssets: ['only-tools.css', 'icon.svg', 'robots.txt'],
       manifest: {
         name: 'FoodLog — калорії та БЖУ',
         short_name: 'FoodLog',

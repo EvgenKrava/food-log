@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { MEALS, type Meal, type Nutrients } from '@foodlog/contracts';
 import { defaultMealForHour, scaleNutrients } from '@foodlog/domain';
+import { tr } from '../i18n';
 import { api } from '../api';
 import { ErrorNote, MacroLine, Sheet, kcalText } from '../components';
-import { MEAL_LABEL } from '../format';
+import { mealLabel } from '../format';
 
 export type Pickable = { id: string; name: string; brand?: string; per100g: Nutrients; servingSizeG?: number };
 
@@ -38,21 +39,21 @@ export function GramsSheet({
   const n = scaleNutrients(item.per100g, valid ? g : 0);
   return (
     <Sheet title={item.brand ? `${item.name} · ${item.brand}` : item.name} onClose={onClose}>
-      <p className="ot-caption">На 100 г: {kcalText(item.per100g.kcal)} · <MacroLine n={item.per100g} /></p>
+      <p className="ot-caption">{tr('На 100 г')}: {kcalText(item.per100g.kcal)} · <MacroLine n={item.per100g} /></p>
       <label className="ot-field">
-        <span className="ot-label">Скільки грамів</span>
+        <span className="ot-label">{tr('Скільки грамів')}</span>
         <input className="ot-input ot-num" inputMode="decimal" autoFocus value={value} onChange={(e) => setValue(e.target.value)} />
       </label>
       <div className="flex flex-wrap gap-2">
         {chips.map((c) => (
           <button key={c} type="button" className="ot-btn ot-btn--soft ot-btn--sm" onClick={() => setValue(String(c))}>
-            {c} г{c === item.servingSizeG ? ' (порція)' : ''}
+            {c} {tr('г')}{c === item.servingSizeG ? ` ${tr('(порція)')}` : ''}
           </button>
         ))}
       </div>
       <div className="ot-segment self-start flex-wrap">
         {MEALS.map((m) => (
-          <button key={m} type="button" aria-pressed={meal === m} onClick={() => setMeal(m)}>{MEAL_LABEL[m]}</button>
+          <button key={m} type="button" aria-pressed={meal === m} onClick={() => setMeal(m)}>{mealLabel(m)}</button>
         ))}
       </div>
       <div className="ot-card ot-card--accent">
@@ -61,7 +62,7 @@ export function GramsSheet({
       </div>
       <ErrorNote error={add.error} />
       <button className="ot-btn ot-btn--block" disabled={!valid || add.isPending} onClick={() => add.mutate()}>
-        {add.isPending ? 'Додаю…' : `Додати в «${MEAL_LABEL[meal]}»`}
+        {add.isPending ? tr('Додаю…') : tr('Додати в «{meal}»', { meal: mealLabel(meal) })}
       </button>
     </Sheet>
   );

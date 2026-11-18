@@ -1,11 +1,2 @@
 User-agent: *
-Allow: /$
-Disallow: /api/
-Disallow: /callback
-Disallow: /add
-Disallow: /catalog
-Disallow: /stats
-Disallow: /profile
-Disallow: /products/
-
-Sitemap: https://foodlog.onlytools.click/sitemap.xml
+Disallow: /

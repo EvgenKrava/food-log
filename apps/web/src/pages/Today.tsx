@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, Plus, Target } from 'lucide-react';
 import { MEALS, type DiaryEntry, type Meal } from '@foodlog/contracts';
+import { tr } from '../i18n';
 import { api } from '../api';
 import { ErrorNote, Header, MacroLine, Sheet, Skeleton, kcalText } from '../components';
-import { MEAL_LABEL, dateTitle, grams, kcal, localDate, shiftDate } from '../format';
+import { mealLabel, dateTitle, grams, kcal, localDate, shiftDate } from '../format';
 import { navigate, useLocation } from '../router';
 
 export function TodayPage() {
@@ -24,8 +25,8 @@ export function TodayPage() {
         title={dateTitle(date)}
         right={
           <>
-            <button className="ot-btn ot-btn--outline ot-btn--icon" aria-label="Попередній день" onClick={() => setDate(shiftDate(date, -1))}><ChevronLeft className="ot-icon" /></button>
-            <button className="ot-btn ot-btn--outline ot-btn--icon" aria-label="Наступний день" onClick={() => setDate(shiftDate(date, 1))}><ChevronRight className="ot-icon" /></button>
+            <button className="ot-btn ot-btn--outline ot-btn--icon" aria-label={tr('Попередній день')} onClick={() => setDate(shiftDate(date, -1))}><ChevronLeft className="ot-icon" /></button>
+            <button className="ot-btn ot-btn--outline ot-btn--icon" aria-label={tr('Наступний день')} onClick={() => setDate(shiftDate(date, 1))}><ChevronRight className="ot-icon" /></button>
           </>
         }
       />
@@ -39,15 +40,15 @@ export function TodayPage() {
               <div className="ot-ring" style={{ ['--p' as string]: pct(data.totals.kcal, t?.kcal) }}>
                 <div>
                   <b>{kcal(data.totals.kcal)}</b>
-                  <small>{t ? `з ${kcal(t.kcal)} ккал` : 'ккал'}</small>
+                  <small>{t ? tr('з {kcal} ккал', { kcal: kcal(t.kcal) }) : tr('ккал')}</small>
                 </div>
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-3">
                 {(['protein', 'fat', 'carbs'] as const).map((k) => (
                   <div key={k} className="flex flex-col gap-1">
                     <div className="flex justify-between ot-caption">
-                      <span>{{ protein: 'Білки', fat: 'Жири', carbs: 'Вуглеводи' }[k]}</span>
-                      <span className="ot-num">{grams(data.totals[k])}{t ? ` / ${t[k]}` : ''} г</span>
+                      <span>{{ protein: tr('Білки'), fat: tr('Жири'), carbs: tr('Вуглеводи') }[k]}</span>
+                      <span className="ot-num">{grams(data.totals[k])}{t ? ` / ${t[k]}` : ''} {tr('г')}</span>
                     </div>
                     <div className="ot-progress"><i style={{ ['--p' as string]: `${pct(data.totals[k], t?.[k])}%` }} /></div>
                   </div>
@@ -58,8 +59,8 @@ export function TodayPage() {
               <a className="ot-row" href="/profile" onClick={(e) => { e.preventDefault(); navigate('/profile'); }}>
                 <span className="ot-row__icon"><Target className="ot-icon" /></span>
                 <span className="ot-row__body">
-                  <span className="ot-row__title">Встановіть денну ціль</span>
-                  <span className="ot-row__sub">Розрахуємо калорії та БЖУ за вашими параметрами</span>
+                  <span className="ot-row__title">{tr('Встановіть денну ціль')}</span>
+                  <span className="ot-row__sub">{tr('Розрахуємо калорії та БЖУ за вашими параметрами')}</span>
                 </span>
               </a>
             )}
@@ -78,7 +79,7 @@ function MealSection({ meal, date, entries, total, onEdit }: { meal: Meal; date:
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between px-1">
-        <h2 className="ot-h3">{MEAL_LABEL[meal]}</h2>
+        <h2 className="ot-h3">{mealLabel(meal)}</h2>
         <span className="ot-caption ot-num">{entries.length ? kcalText(total) : ''}</span>
       </div>
       <div className="ot-list">
@@ -86,13 +87,13 @@ function MealSection({ meal, date, entries, total, onEdit }: { meal: Meal; date:
           <button key={e.id} className="ot-row text-left" onClick={() => onEdit(e)}>
             <span className="ot-row__body">
               <span className="ot-row__title">{e.name}</span>
-              <span className="ot-row__sub ot-num">{grams(e.grams)} г · <MacroLine n={e.nutrients} /></span>
+              <span className="ot-row__sub ot-num">{grams(e.grams)} {tr('г')} · <MacroLine n={e.nutrients} /></span>
             </span>
             <span className="ot-row__value">{kcal(e.nutrients.kcal)}</span>
           </button>
         ))}
         <a className="ot-row ot-row--empty" href={`/add?meal=${meal}&date=${date}`} onClick={(ev) => { ev.preventDefault(); navigate(`/add?meal=${meal}&date=${date}`); }}>
-          <span className="ot-row__body ot-row__sub">Додати до «{MEAL_LABEL[meal]}»</span>
+          <span className="ot-row__body ot-row__sub">{tr('Додати до «{meal}»', { meal: mealLabel(meal) })}</span>
           <span className="ot-row__value"><Plus className="ot-icon" /></span>
         </a>
       </div>
@@ -115,19 +116,19 @@ function EditEntrySheet({ entry, onClose }: { entry: DiaryEntry; onClose: () => 
   return (
     <Sheet title={entry.name} onClose={onClose}>
       <label className="ot-field">
-        <span className="ot-label">Грами</span>
+        <span className="ot-label">{tr('Грами')}</span>
         <input className="ot-input ot-num" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} />
       </label>
       <div className="ot-segment self-start flex-wrap">
         {MEALS.map((m) => (
-          <button key={m} type="button" aria-pressed={meal === m} onClick={() => setMeal(m)}>{MEAL_LABEL[m]}</button>
+          <button key={m} type="button" aria-pressed={meal === m} onClick={() => setMeal(m)}>{mealLabel(m)}</button>
         ))}
       </div>
       <p className="ot-label ot-num">{kcalText((entry.per100g.kcal * (valid ? g : 0)) / 100)}</p>
       <ErrorNote error={save.error ?? remove.error} />
       <div className="flex gap-2">
-        <button className="ot-btn ot-btn--outline flex-1" disabled={remove.isPending} onClick={() => remove.mutate()}>Видалити</button>
-        <button className="ot-btn flex-1" disabled={!valid || save.isPending} onClick={() => save.mutate()}>Зберегти</button>
+        <button className="ot-btn ot-btn--outline flex-1" disabled={remove.isPending} onClick={() => remove.mutate()}>{tr('Видалити')}</button>
+        <button className="ot-btn flex-1" disabled={!valid || save.isPending} onClick={() => save.mutate()}>{tr('Зберегти')}</button>
       </div>
     </Sheet>
   );

@@ -1,3 +1,4 @@
+import { tr } from './i18n';
 import { useEffect, type ReactNode } from 'react';
 import type { Nutrients } from '@foodlog/contracts';
 import { grams, kcal } from './format';
@@ -33,12 +34,12 @@ export function Header({ title, left, right }: { title: ReactNode; left?: ReactN
 export function MacroLine({ n }: { n: Nutrients }) {
   return (
     <>
-      Б {grams(n.protein)} · Ж {grams(n.fat)} · В {grams(n.carbs)}
+      {tr('Б')} {grams(n.protein)} · {tr('Ж')} {grams(n.fat)} · {tr('В')} {grams(n.carbs)}
     </>
   );
 }
 
-export const kcalText = (n: number) => `${kcal(n)} ккал`;
+export const kcalText = (n: number) => `${kcal(n)} ${tr('ккал')}`;
 
 export function Skeleton({ h = 56 }: { h?: number }) {
   return <div className="fl-skeleton" style={{ height: h }} />;
@@ -46,6 +47,6 @@ export function Skeleton({ h = 56 }: { h?: number }) {
 
 export function ErrorNote({ error }: { error: unknown }) {
   if (!error) return null;
-  const message = error instanceof Error ? error.message : 'Щось пішло не так';
+  const message = error instanceof Error ? error.message : tr('Щось пішло не так');
   return <p className="ot-chip ot-chip--bad self-start">{message}</p>;
 }
