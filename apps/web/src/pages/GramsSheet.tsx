@@ -7,7 +7,7 @@ import { api } from '../api';
 import { ErrorNote, MacroLine, Sheet, kcalText } from '../components';
 import { mealLabel } from '../format';
 
-export type Pickable = { id: string; name: string; brand?: string; per100g: Nutrients; servingSizeG?: number };
+export type Pickable = { type?: 'product' | 'dish'; id: string; name: string; brand?: string; per100g: Nutrients; servingSizeG?: number };
 
 export function GramsSheet({
   item,
@@ -28,7 +28,7 @@ export function GramsSheet({
   const g = Number(value.replace(',', '.'));
   const valid = Number.isFinite(g) && g > 0 && g <= 5000;
   const add = useMutation({
-    mutationFn: () => api.addEntry(date, { meal, item: { type: 'product', id: item.id }, grams: g }),
+    mutationFn: () => api.addEntry(date, { meal, item: item.type === 'dish' ? { type: 'dish', id: item.id } : { type: 'product', id: item.id }, grams: g }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['day', date] });
       void qc.invalidateQueries({ queryKey: ['search', ''] });

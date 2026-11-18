@@ -120,7 +120,7 @@ export function ProfilePage({ email }: { email: string }) {
                 <button type="button" aria-pressed={f.sex === 'male'} onClick={() => setF({ ...f, sex: 'male' })}>{tr('Чоловік')}</button>
                 <button type="button" aria-pressed={f.sex === 'female'} onClick={() => setF({ ...f, sex: 'female' })}>{tr('Жінка')}</button>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 items-end gap-3">
                 {input('birthYear', tr('Рік народження'))}
                 {input('heightCm', tr('Зріст, см'))}
                 {input('weightKg', tr('Вага, кг'))}

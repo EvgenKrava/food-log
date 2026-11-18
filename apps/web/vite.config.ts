@@ -33,6 +33,6 @@ export default defineConfig({
   ],
   server: {
     port: 5173,
-    proxy: { '/api': { target: 'https://foodlog.onlytools.click', changeOrigin: true } },
+    proxy: { '/api': { target: process.env.API_PROXY ?? 'https://foodlog.onlytools.click', changeOrigin: true } },
   },
 });

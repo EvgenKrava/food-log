@@ -10,6 +10,7 @@ import { TodayPage } from './pages/Today';
 import { AddPage } from './pages/Add';
 import { ProductFormPage } from './pages/ProductForm';
 import { CatalogPage } from './pages/Catalog';
+import { DishBuilderPage } from './pages/DishBuilder';
 import { StatsPage } from './pages/Stats';
 import { ProfilePage } from './pages/Profile';
 
@@ -21,6 +22,9 @@ export function App() {
   const auth = useAuth();
   const { path } = useLocation();
   const redirecting = useRef(false);
+  // Local UI work against apps/api/src/dev-server.ts: no sign-in at all.
+  const fakeAuth = import.meta.env.DEV && import.meta.env.VITE_FAKE_AUTH === '1';
+  const authed = fakeAuth || auth.isAuthenticated;
 
   // Keep a live token for the API client; a failed refresh sends the user back to the shared sign-in.
   useEffect(() => {
@@ -34,7 +38,7 @@ export function App() {
     });
   }, [auth]);
 
-  const signedOut = !auth.isLoading && !auth.isAuthenticated && !auth.activeNavigator && path !== '/callback';
+  const signedOut = !fakeAuth && !auth.isLoading && !auth.isAuthenticated && !auth.activeNavigator && path !== '/callback';
   useEffect(() => {
     if (!signedOut || redirecting.current) return;
     const hasRefresh = !!auth.user?.refresh_token;
@@ -44,9 +48,9 @@ export function App() {
     else go();
   }, [signedOut, auth]);
 
-  const me = useQuery({ queryKey: ['me'], queryFn: api.me, enabled: auth.isAuthenticated });
+  const me = useQuery({ queryKey: ['me'], queryFn: api.me, enabled: authed });
 
-  if (auth.error && !auth.isAuthenticated) {
+  if (auth.error && !authed) {
     return (
       <Centered>
         <div className="ot-card max-w-sm">
@@ -57,7 +61,7 @@ export function App() {
       </Centered>
     );
   }
-  if (!auth.isAuthenticated || !me.data) {
+  if (!authed || !me.data) {
     return <Centered><p className="ot-muted">{tr('Завантаження…')}</p></Centered>;
   }
   if (!me.data.hasAccess) {
@@ -88,6 +92,7 @@ export function App() {
   if (path === '/add') page = <AddPage />;
   else if (path === '/products/new') page = <ProductFormPage />;
   else if (path === '/catalog') page = <CatalogPage />;
+  else if (path.startsWith('/dishes/')) page = <DishBuilderPage />;
   else if (path === '/stats') page = <StatsPage />;
   else if (path === '/profile') page = <ProfilePage email={me.data.email} />;
   else page = <TodayPage />;

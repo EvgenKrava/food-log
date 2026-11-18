@@ -9,7 +9,7 @@ import {
   type QueryCommandInput,
 } from '@aws-sdk/lib-dynamodb';
 import type { DiaryEntry, IsoDate, Profile, WeightEntry } from '@foodlog/contracts';
-import type { Repository, StoredProduct } from './ports.ts';
+import type { Repository, StoredDish, StoredProduct } from './ports.ts';
 
 // Single table (spec §7). Keys: pk/sk; gsi1 = barcode lookup; gsi2 = owner's items. TTL attribute `ttl`.
 const userPk = (uid: string) => `USER#${uid}`;
@@ -44,6 +44,44 @@ export class DynamoRepository implements Repository {
       start = res.LastEvaluatedKey;
     } while (start);
     return out;
+  }
+
+  async getDish(id: string) {
+    const res = await this.db.send(
+      new GetCommand({ TableName: this.table, Key: { pk: `DISH#${id}`, sk: 'META' } }),
+    );
+    return res.Item ? strip<StoredDish>(res.Item, KEY_ATTRS) : null;
+  }
+
+  async putDish(d: StoredDish) {
+    await this.db.send(
+      new PutCommand({
+        TableName: this.table,
+        Item: {
+          ...d,
+          pk: `DISH#${d.id}`,
+          sk: 'META',
+          kind: 'dish',
+          ...(d.ownerId ? { gsi2pk: `OWNER#${d.ownerId}`, gsi2sk: `DISH#${d.updatedAt}#${d.id}` } : {}),
+        },
+      }),
+    );
+  }
+
+  async deleteDish(id: string) {
+    await this.db.send(
+      new DeleteCommand({ TableName: this.table, Key: { pk: `DISH#${id}`, sk: 'META' } }),
+    );
+  }
+
+  async listOwnDishes(ownerId: string) {
+    const items = await this.queryAll({
+      IndexName: 'gsi2',
+      KeyConditionExpression: 'gsi2pk = :pk AND begins_with(gsi2sk, :p)',
+      ExpressionAttributeValues: { ':pk': `OWNER#${ownerId}`, ':p': 'DISH#' },
+      ScanIndexForward: false,
+    });
+    return items.map((i) => strip<StoredDish>(i, KEY_ATTRS));
   }
 
   async getProduct(id: string) {

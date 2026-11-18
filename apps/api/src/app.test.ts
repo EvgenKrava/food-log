@@ -208,3 +208,60 @@ describe('account data', () => {
     expect(repo.products.size).toBe(0);
   });
 });
+
+describe('dishes', () => {
+  const create = async (call: ReturnType<typeof setup>['call'], extra: object = {}) => {
+    const { body: p } = await call('POST', '/products', {
+      name: 'Сир',
+      per100g: { kcal: 200, protein: 20, fat: 10, carbs: 5 },
+      publish: false,
+    });
+    return call('POST', '/dishes', {
+      name: 'Сирники',
+      ingredients: [
+        { productId: p.id, grams: 400 },
+        { productId: `off-${BUCKWHEAT.barcode}`, grams: 100 },
+      ],
+      publish: false,
+      ...extra,
+    });
+  };
+
+  it('computes totals and per 100 g from snapshots, honouring cooked weight', async () => {
+    const { call } = setup();
+    const res = await create(call, { cookedWeightG: 400 });
+    expect(res.status).toBe(201);
+    expect(res.body.totals.kcal).toBeCloseTo(800 + 340);
+    expect(res.body.weightG).toBe(400);
+    expect(res.body.per100g.kcal).toBeCloseTo(285);
+    expect(res.body.ingredients[1].name).toBe('Гречка');
+  });
+
+  it('logs a dish, shows it in search, recents and my items, and hides it from others', async () => {
+    const { call, as } = setup();
+    const { body: dish } = await create(call);
+    const entry = await call('POST', '/diary/2026-11-18/entries', {
+      meal: 'dinner',
+      item: { type: 'dish', id: dish.id },
+      grams: 250,
+    });
+    expect(entry.status).toBe(201);
+    expect(entry.body.nutrients.kcal).toBeCloseTo((1140 / 500) * 250);
+    expect((await call('GET', '/search?q=сирн')).body.items[0].type).toBe('dish');
+    expect((await call('GET', '/recents')).body.items[0].id).toBe(dish.id);
+    expect((await call('GET', '/me/items')).body.dishes).toHaveLength(1);
+    as(BOB);
+    expect((await call('GET', `/dishes/${dish.id}`)).status).toBe(404);
+  });
+
+  it('edits and deletes a dish', async () => {
+    const { call } = setup();
+    const { body: dish } = await create(call);
+    const updated = await call('PUT', `/dishes/${dish.id}`, {
+      name: 'Сирники 2',
+      ingredients: dish.ingredients.slice(0, 1).map((i: { productId: string }) => ({ productId: i.productId, grams: 200 })),
+    });
+    expect(updated.body.totals.kcal).toBeCloseTo(400);
+    expect((await call('DELETE', `/dishes/${dish.id}`)).status).toBe(204);
+  });
+});

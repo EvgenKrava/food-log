@@ -22,7 +22,26 @@ export type StoredProduct = {
   updatedAt: string;
 };
 
+export type StoredDish = {
+  id: string;
+  ownerId?: string;
+  name: string;
+  ingredients: { productId: string; grams: number; name: string; per100g: Nutrients }[];
+  cookedWeightG?: number;
+  totals: Nutrients;
+  weightG: number;
+  per100g: Nutrients;
+  status: ModerationStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export interface Repository {
+  getDish(id: string): Promise<StoredDish | null>;
+  putDish(dish: StoredDish): Promise<void>;
+  deleteDish(id: string): Promise<void>;
+  listOwnDishes(ownerId: string): Promise<StoredDish[]>;
+
   getProduct(id: string): Promise<StoredProduct | null>;
   putProduct(product: StoredProduct): Promise<void>;
   deleteProduct(id: string): Promise<void>;

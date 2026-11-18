@@ -1,7 +1,7 @@
 import { tr } from '../i18n';
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, PackagePlus, ScanBarcode, Search, Star } from 'lucide-react';
+import { ArrowLeft, CookingPot, PackagePlus, ScanBarcode, Search, Star } from 'lucide-react';
 import { MealSchema } from '@foodlog/contracts';
 import { ApiError, api } from '../api';
 import { ErrorNote, Header, MacroLine, Skeleton } from '../components';
@@ -71,7 +71,8 @@ export function AddPage() {
                   {item.brand ? `${item.brand} · ` : ''}<MacroLine n={item.per100g} />
                 </span>
               </span>
-              {item.isOwn && <Star className="ot-icon text-[var(--ot-accent)]" aria-label={tr('Мій продукт')} />}
+              {item.type === 'dish' && <CookingPot className="ot-icon text-[var(--ot-accent)]" aria-label={tr('Страва')} />}
+              {item.isOwn && item.type === 'product' && <Star className="ot-icon text-[var(--ot-accent)]" aria-label={tr('Мій продукт')} />}
               <span className="ot-row__value">{kcal(item.per100g.kcal)}<span className="ot-caption"> {tr('/100г')}</span></span>
             </button>
           ))}

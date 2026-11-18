@@ -1,9 +1,25 @@
 import type { DiaryEntry, IsoDate, Profile, WeightEntry } from '@foodlog/contracts';
-import type { Repository, StoredProduct } from './ports.ts';
+import type { Repository, StoredDish, StoredProduct } from './ports.ts';
 
 /** In-memory Repository for tests and local development. */
 export class MemoryRepository implements Repository {
   readonly products = new Map<string, StoredProduct>();
+  readonly dishes = new Map<string, StoredDish>();
+
+  async getDish(id: string) {
+    return this.dishes.get(id) ?? null;
+  }
+  async putDish(d: StoredDish) {
+    this.dishes.set(d.id, d);
+  }
+  async deleteDish(id: string) {
+    this.dishes.delete(id);
+  }
+  async listOwnDishes(ownerId: string) {
+    return [...this.dishes.values()]
+      .filter((d) => d.ownerId === ownerId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
   readonly entries = new Map<string, { entry: DiaryEntry; expiresAt: number }>();
   readonly profiles = new Map<string, Profile>();
   readonly weights = new Map<string, { entry: WeightEntry; expiresAt: number }>();
