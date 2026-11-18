@@ -1,4 +1,5 @@
 import type {
+  LabelReading,
   DiaryEntry,
   IsoDate,
   ModerationStatus,
@@ -63,6 +64,21 @@ export interface Repository {
 
   /** Removes every USER#<uid> item (diary, weight, profile). */
   deleteUserData(uid: string): Promise<void>;
+
+  /**
+   * Atomically counts one scan against the caller's and the service's daily limits.
+   * Returns false (and counts nothing) when either limit is already reached.
+   */
+  consumeScanQuota(uid: string, day: IsoDate, limits: ScanLimits, expiresAt: number): Promise<boolean>;
+}
+
+export type ScanLimits = { perUser: number; global: number };
+
+export type LabelImage = { data: string; mediaType: 'image/jpeg' | 'image/webp' };
+
+/** Reads a nutrition label photo; returns what is printed, unconverted. */
+export interface LabelReader {
+  read(image: LabelImage): Promise<LabelReading>;
 }
 
 /** A product as Open Food Facts describes it, already validated and converted to per 100 g. */

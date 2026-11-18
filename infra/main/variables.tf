@@ -28,3 +28,15 @@ variable "history_days" {
   type        = number
   default     = 365
 }
+
+variable "scan_limit_per_user" {
+  description = "AI label scans one person may run per UTC day."
+  type        = number
+  default     = 20
+}
+
+variable "scan_limit_global" {
+  description = "AI label scans the whole service may run per UTC day (caps the Bedrock bill)."
+  type        = number
+  default     = 300
+}

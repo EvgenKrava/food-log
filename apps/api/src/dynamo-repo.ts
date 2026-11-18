@@ -1,4 +1,4 @@
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, TransactionCanceledException } from '@aws-sdk/client-dynamodb';
 import {
   BatchWriteCommand,
   DeleteCommand,
@@ -7,9 +7,10 @@ import {
   PutCommand,
   QueryCommand,
   type QueryCommandInput,
+  TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
 import type { DiaryEntry, IsoDate, Profile, WeightEntry } from '@foodlog/contracts';
-import type { Repository, StoredDish, StoredProduct } from './ports.ts';
+import type { Repository, ScanLimits, StoredDish, StoredProduct } from './ports.ts';
 
 // Single table (spec §7). Keys: pk/sk; gsi1 = barcode lookup; gsi2 = owner's items. TTL attribute `ttl`.
 const userPk = (uid: string) => `USER#${uid}`;
@@ -240,6 +241,31 @@ export class DynamoRepository implements Repository {
         );
         requests = (res.UnprocessedItems?.[this.table] ?? []) as typeof requests;
       }
+    }
+  }
+
+  // Kept outside USER#<uid> on purpose: deleting your data must not reset today's scan count.
+  async consumeScanQuota(uid: string, day: IsoDate, limits: ScanLimits, expiresAt: number) {
+    const bump = (sk: string, limit: number) => ({
+      Update: {
+        TableName: this.table,
+        Key: { pk: `QUOTA#scan#${day}`, sk },
+        UpdateExpression: 'ADD n :one SET #ttl = :ttl',
+        ConditionExpression: 'attribute_not_exists(n) OR n < :limit',
+        ExpressionAttributeNames: { '#ttl': 'ttl' },
+        ExpressionAttributeValues: { ':one': 1, ':limit': limit, ':ttl': expiresAt },
+      },
+    });
+    try {
+      await this.db.send(
+        new TransactWriteCommand({
+          TransactItems: [bump(`USER#${uid}`, limits.perUser), bump('GLOBAL', limits.global)],
+        }),
+      );
+      return true;
+    } catch (err) {
+      if (err instanceof TransactionCanceledException) return false;
+      throw err;
     }
   }
 }

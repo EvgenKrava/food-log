@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { BarcodeSchema, ScanKeySchema } from './common.ts';
 import { ProductDraftSchema } from './product.ts';
+import { UploadContentTypeSchema } from './uploads.ts';
 
 export const DraftWarningSchema = z.enum([
   'SERVING_SIZE_REQUIRED',
@@ -35,9 +36,19 @@ export const ScanRequestSchema = z.object({
 });
 export type ScanRequest = z.infer<typeof ScanRequestSchema>;
 
+// The client downsizes the photo and sends it inline (base64), so no upload bucket is needed.
+export const SCAN_IMAGE_MAX_BASE64 = 4_000_000;
+
+export const ScanImageRequestSchema = z.object({
+  image: z.string().min(100).max(SCAN_IMAGE_MAX_BASE64).regex(/^[A-Za-z0-9+/]+={0,2}$/, 'must be base64'),
+  mediaType: UploadContentTypeSchema,
+  barcode: BarcodeSchema.optional(),
+});
+export type ScanImageRequest = z.infer<typeof ScanImageRequestSchema>;
+
 export const ScanResponseSchema = z.object({
   draft: ProductDraftSchema,
   warnings: z.array(DraftWarningSchema),
-  photoKey: ScanKeySchema,
+  photoKey: ScanKeySchema.optional(),
 });
 export type ScanResponse = z.infer<typeof ScanResponseSchema>;

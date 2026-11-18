@@ -36,6 +36,14 @@ data "aws_iam_policy_document" "api" {
     ]
     resources = [aws_dynamodb_table.main.arn, "${aws_dynamodb_table.main.arn}/index/*"]
   }
+  # Label scans: Haiku through the InvokeModel stack (cross-region inference profile).
+  statement {
+    actions = ["bedrock:InvokeModel"]
+    resources = [
+      "arn:aws:bedrock:*::foundation-model/anthropic.*",
+      "arn:aws:bedrock:*:${local.account_id}:inference-profile/*anthropic*",
+    ]
+  }
 }
 
 resource "aws_iam_role_policy" "api" {
@@ -51,12 +59,15 @@ resource "aws_lambda_function" "api" {
   architectures    = ["arm64"]
   filename         = data.archive_file.api.output_path
   source_code_hash = data.archive_file.api.output_base64sha256
-  timeout          = 10
-  memory_size      = 512
+  # A label scan waits on the model for a few seconds; API Gateway caps the request at 30 s.
+  timeout     = 28
+  memory_size = 512
   environment {
     variables = {
-      TABLE_NAME   = aws_dynamodb_table.main.name
-      HISTORY_DAYS = tostring(var.history_days)
+      TABLE_NAME          = aws_dynamodb_table.main.name
+      HISTORY_DAYS        = tostring(var.history_days)
+      SCAN_LIMIT_PER_USER = tostring(var.scan_limit_per_user)
+      SCAN_LIMIT_GLOBAL   = tostring(var.scan_limit_global)
     }
   }
   depends_on = [aws_cloudwatch_log_group.api]

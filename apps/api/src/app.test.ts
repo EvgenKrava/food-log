@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
 import type { AuthUser } from './auth.ts';
 import { MemoryRepository } from './memory-repo.ts';
-import type { FoodFacts, OffProduct } from './ports.ts';
+import type { FoodFacts, LabelImage, LabelReader, OffProduct } from './ports.ts';
+import type { LabelReading } from '@foodlog/contracts';
+import { toReading } from './label-reader.ts';
 
 const BUCKWHEAT: OffProduct = {
   barcode: '4820000000000',
@@ -29,6 +31,7 @@ const BOB: AuthUser = { sub: '22222222-2222-2222-2222-222222222222', email: 'b@x
 function setup(user: AuthUser | null = ALICE) {
   const repo = new MemoryRepository();
   const off = new FakeOff();
+  const labels = new FakeLabels();
   let current = user;
   const app = createApp({
     repo,
@@ -36,6 +39,8 @@ function setup(user: AuthUser | null = ALICE) {
     clock: () => new Date('2026-11-18T09:00:00Z'),
     historyDays: 365,
     identify: () => current,
+    labels,
+    scanLimits: { perUser: 2, global: 3 },
   });
   const call = async (method: string, path: string, body?: unknown) => {
     const res = await app.request(`/api${path}`, {
@@ -46,8 +51,73 @@ function setup(user: AuthUser | null = ALICE) {
     const text = await res.text();
     return { status: res.status, body: text ? JSON.parse(text) : null };
   };
-  return { repo, off, call, as: (u: AuthUser | null) => (current = u) };
+  return { repo, off, labels, call, as: (u: AuthUser | null) => (current = u) };
 }
+
+class FakeLabels implements LabelReader {
+  reading: LabelReading = {
+    readable: true,
+    name: 'Йогурт',
+    basis: 'perServing',
+    servingSizeG: 200,
+    energyKcal: 150,
+    protein: 8,
+    fat: 6,
+    carbs: 16,
+  };
+  seen: LabelImage[] = [];
+  async read(image: LabelImage) {
+    this.seen.push(image);
+    return this.reading;
+  }
+}
+
+const IMAGE = { image: 'A'.repeat(200), mediaType: 'image/jpeg' };
+
+describe('label scan', () => {
+  it('returns a per-100 g draft from a per-serving label', async () => {
+    const { call, labels } = setup();
+    const r = await call('POST', '/scans', { ...IMAGE, barcode: '4820000000000' });
+    expect(r.status).toBe(200);
+    expect(r.body.draft).toEqual({
+      name: 'Йогурт',
+      barcode: '4820000000000',
+      servingSizeG: 200,
+      per100g: { kcal: 75, protein: 4, fat: 3, carbs: 8 },
+    });
+    expect(labels.seen[0]?.mediaType).toBe('image/jpeg');
+  });
+
+  it('answers 422 for an unreadable photo', async () => {
+    const { call, labels } = setup();
+    labels.reading = { readable: false, basis: 'per100g' };
+    expect((await call('POST', '/scans', IMAGE)).body.error.code).toBe('SCAN_UNREADABLE');
+  });
+
+  it('rejects a body that is not base64', async () => {
+    const { call } = setup();
+    expect((await call('POST', '/scans', { ...IMAGE, image: '<script>'.repeat(30) })).status).toBe(400);
+  });
+
+  it('enforces the per-user and service-wide daily limits', async () => {
+    const { call, as } = setup();
+    expect((await call('POST', '/scans', IMAGE)).status).toBe(200);
+    expect((await call('POST', '/scans', IMAGE)).status).toBe(200);
+    expect((await call('POST', '/scans', IMAGE)).status).toBe(429);
+    as(BOB);
+    expect((await call('POST', '/scans', IMAGE)).status).toBe(200);
+    expect((await call('POST', '/scans', IMAGE)).status).toBe(429);
+  });
+
+  it('maps model nulls to missing values', () => {
+    expect(
+      toReading({
+        readable: true, name: 'X', brand: null, barcode: null, basis: 'per100g', servingSizeG: null,
+        energyKcal: 100, energyKj: null, protein: null, fat: 1, carbs: 2,
+      }),
+    ).toEqual({ readable: true, name: 'X', basis: 'per100g', energyKcal: 100, fat: 1, carbs: 2 });
+  });
+});
 
 describe('access', () => {
   it('rejects callers without a token', async () => {

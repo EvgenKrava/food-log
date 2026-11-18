@@ -1,8 +1,10 @@
 // Local API for UI work: in-memory data, real Open Food Facts, every caller is one test user.
+// Label scans call real Bedrock when AWS credentials are present (AWS_PROFILE=yevhenii).
 // Run: node apps/api/src/dev-server.ts (Node ≥ 22.18 strips the types), then `pnpm --filter @foodlog/web dev`.
 import { createServer } from 'node:http';
 import { createApp } from './app.ts';
 import { MemoryRepository } from './memory-repo.ts';
+import { BedrockLabelReader } from './label-reader.ts';
 import { HttpFoodFacts } from './off.ts';
 
 const app = createApp({
@@ -10,6 +12,7 @@ const app = createApp({
   off: new HttpFoodFacts(),
   clock: () => new Date(),
   historyDays: 365,
+  labels: new BedrockLabelReader(process.env.LABEL_MODEL || undefined),
   identify: () => ({
     sub: '00000000-0000-4000-8000-000000000001',
     email: 'dev@localhost',

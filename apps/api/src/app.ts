@@ -12,6 +12,8 @@ import {
   HTTP_STATUS_BY_ERROR_CODE,
   IsoDateSchema,
   ProductIdSchema,
+  ScanImageRequestSchema,
+  type ScanResponse,
   PutProfileRequestSchema,
   PutWeightRequestSchema,
   SearchQuerySchema,
@@ -36,6 +38,7 @@ import {
   deriveRecents,
   initialModerationState,
   matchesAllPrefixes,
+  normalizeLabel,
   normalizeBarcode,
   recentsWindow,
   scaleNutrients,
@@ -43,7 +46,16 @@ import {
   sumNutrients,
 } from '@foodlog/domain';
 import { ACCESS_GROUP, ADMIN_GROUP, claimsFrom, type AuthUser } from './auth.ts';
-import type { Clock, FoodFacts, OffProduct, Repository, StoredDish, StoredProduct } from './ports.ts';
+import type {
+  Clock,
+  FoodFacts,
+  LabelReader,
+  OffProduct,
+  Repository,
+  ScanLimits,
+  StoredDish,
+  StoredProduct,
+} from './ports.ts';
 
 export type Deps = {
   repo: Repository;
@@ -51,11 +63,16 @@ export type Deps = {
   clock: Clock;
   /** Days a diary entry or weight entry is kept for free users (core retention policy: 12 months). */
   historyDays: number;
+  /** Reads label photos; scanning answers UPSTREAM_UNAVAILABLE without it. */
+  labels?: LabelReader;
+  scanLimits?: ScanLimits;
   /** Resolves the caller; production reads API Gateway JWT claims. */
   identify?: (c: Context) => AuthUser | null;
 };
 
 type Env = { Variables: { user: AuthUser } };
+
+export const DEFAULT_SCAN_LIMITS: ScanLimits = { perUser: 20, global: 300 };
 
 const fail = (code: ErrorCode, message: string, details?: unknown): never => {
   throw new DomainError(code, message, details);
@@ -559,6 +576,21 @@ export function createApp(deps: Deps) {
   });
 
   /** Removes the caller's FoodLog data; the Only Tools account itself stays. */
+  app.post('/scans', async (c) => {
+    const req = parse(ScanImageRequestSchema, await c.req.json().catch(() => null));
+    if (!deps.labels) return fail('UPSTREAM_UNAVAILABLE', 'label scanning is not configured');
+    const limits = deps.scanLimits ?? DEFAULT_SCAN_LIMITS;
+    const twoDays = Math.floor(clock().getTime() / 1000) + 2 * 86_400;
+    if (!(await repo.consumeScanQuota(c.get('user').sub, today(), limits, twoDays))) {
+      return fail('QUOTA_EXCEEDED', 'daily scan limit reached', { perUser: limits.perUser });
+    }
+    const reading = await deps.labels.read({ data: req.image, mediaType: req.mediaType });
+    const result = normalizeLabel(reading, req.barcode);
+    if (!result.ok) return fail('SCAN_UNREADABLE', 'could not read the label');
+    const body: ScanResponse = { draft: result.draft, warnings: result.warnings };
+    return c.json(body);
+  });
+
   app.delete('/me', async (c) => {
     const uid = c.get('user').sub;
     for (const p of await repo.listOwnProducts(uid)) {

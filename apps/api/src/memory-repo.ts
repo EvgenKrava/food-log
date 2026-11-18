@@ -1,5 +1,5 @@
 import type { DiaryEntry, IsoDate, Profile, WeightEntry } from '@foodlog/contracts';
-import type { Repository, StoredDish, StoredProduct } from './ports.ts';
+import type { Repository, ScanLimits, StoredDish, StoredProduct } from './ports.ts';
 
 /** In-memory Repository for tests and local development. */
 export class MemoryRepository implements Repository {
@@ -23,6 +23,7 @@ export class MemoryRepository implements Repository {
   readonly entries = new Map<string, { entry: DiaryEntry; expiresAt: number }>();
   readonly profiles = new Map<string, Profile>();
   readonly weights = new Map<string, { entry: WeightEntry; expiresAt: number }>();
+  readonly scanCounts = new Map<string, number>();
 
   async getProduct(id: string) {
     return this.products.get(id) ?? null;
@@ -87,5 +88,16 @@ export class MemoryRepository implements Repository {
       for (const k of [...map.keys()]) if (k.startsWith(`${uid}#`)) map.delete(k);
     }
     this.profiles.delete(uid);
+  }
+
+  async consumeScanQuota(uid: string, day: IsoDate, limits: ScanLimits) {
+    const userKey = `${day}#${uid}`;
+    const globalKey = `${day}#GLOBAL`;
+    const user = this.scanCounts.get(userKey) ?? 0;
+    const all = this.scanCounts.get(globalKey) ?? 0;
+    if (user >= limits.perUser || all >= limits.global) return false;
+    this.scanCounts.set(userKey, user + 1);
+    this.scanCounts.set(globalKey, all + 1);
+    return true;
   }
 }
