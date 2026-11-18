@@ -15,6 +15,7 @@
     "@foodlog/contracts": "workspace:*",
     "@foodlog/domain": "workspace:*",
     "@tanstack/react-query": "^5.103.0",
+    "barcode-detector": "^3",
     "lucide-react": "^1.47.0",
     "oidc-client-ts": "^3.5.0",
     "react": "^19.3.0",
