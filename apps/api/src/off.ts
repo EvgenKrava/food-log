@@ -25,6 +25,8 @@ const num = (v: unknown): number | undefined => {
   return typeof n === 'number' && Number.isFinite(n) ? n : undefined;
 };
 const round = (n: number, digits: number) => Math.round(n * 10 ** digits) / 10 ** digits;
+// OFF stores float32 values (3.0999999046); labels print at most two decimals.
+const roundOpt = (n: number | undefined) => (n === undefined ? undefined : round(n, 2));
 
 /** Turns one OFF record into a product, or undefined when it lacks a valid barcode, name or macros. */
 export function fromOff(raw: OffRaw): OffProduct | undefined {
@@ -40,9 +42,9 @@ export function fromOff(raw: OffRaw): OffProduct | undefined {
   const kcal = num(n['energy-kcal_100g']) ?? (kj === undefined ? undefined : kj / KJ_PER_KCAL);
   const parsed = Per100gSchema.safeParse({
     kcal: kcal === undefined ? undefined : round(kcal, 1),
-    protein: num(n['proteins_100g']),
-    fat: num(n['fat_100g']),
-    carbs: num(n['carbohydrates_100g']),
+    protein: roundOpt(num(n['proteins_100g'])),
+    fat: roundOpt(num(n['fat_100g'])),
+    carbs: roundOpt(num(n['carbohydrates_100g'])),
   });
   if (!parsed.success) return undefined;
   const brands = Array.isArray(raw.brands) ? raw.brands[0] : raw.brands;
