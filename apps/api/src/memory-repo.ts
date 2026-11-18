@@ -1,5 +1,5 @@
 import type { DiaryEntry, IsoDate, Profile, WeightEntry } from '@foodlog/contracts';
-import type { Repository, ScanLimits, StoredDish, StoredProduct } from './ports.ts';
+import type { CatalogStatus, Repository, ScanLimits, StoredDish, StoredProduct } from './ports.ts';
 
 /** In-memory Repository for tests and local development. */
 export class MemoryRepository implements Repository {
@@ -99,5 +99,15 @@ export class MemoryRepository implements Repository {
     this.scanCounts.set(userKey, user + 1);
     this.scanCounts.set(globalKey, all + 1);
     return true;
+  }
+
+  async listCatalog(status: CatalogStatus) {
+    const byChange = (a: { updatedAt: string }, b: { updatedAt: string }) => a.updatedAt.localeCompare(b.updatedAt);
+    return {
+      products: [...this.products.values()]
+        .filter((p) => p.status === status && p.source === 'user')
+        .sort(byChange),
+      dishes: [...this.dishes.values()].filter((d) => d.status === status).sort(byChange),
+    };
   }
 }

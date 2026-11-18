@@ -24,3 +24,6 @@ export const ModerationQueueItemSchema = z.discriminatedUnion('type', [
 export const ModerationQueueResponseSchema = z.object({
   items: z.array(ModerationQueueItemSchema),
 });
+export type ModerationQueueItem = z.infer<typeof ModerationQueueItemSchema>;
+export type ModerationQueueResponse = z.infer<typeof ModerationQueueResponseSchema>;
+export type RejectRequest = z.infer<typeof RejectRequestSchema>;

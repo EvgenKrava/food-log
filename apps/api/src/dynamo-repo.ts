@@ -10,9 +10,10 @@ import {
   TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
 import type { DiaryEntry, IsoDate, Profile, WeightEntry } from '@foodlog/contracts';
-import type { Repository, ScanLimits, StoredDish, StoredProduct } from './ports.ts';
+import type { CatalogStatus, Repository, ScanLimits, StoredDish, StoredProduct } from './ports.ts';
 
-// Single table (spec §7). Keys: pk/sk; gsi1 = barcode lookup; gsi2 = owner's items. TTL attribute `ttl`.
+// Single table (spec §7). Keys: pk/sk; gsi1 = barcode lookup; gsi2 = owner's items;
+// gsi3 = shared catalog (user items that are pending review or public). TTL attribute `ttl`.
 const userPk = (uid: string) => `USER#${uid}`;
 const productPk = (id: string) => `PRODUCT#${id}`;
 
@@ -21,7 +22,14 @@ type Item = Record<string, unknown>;
 function strip<T>(item: Item | undefined, keys: readonly string[]): T {
   return Object.fromEntries(Object.entries(item ?? {}).filter(([k]) => !keys.includes(k))) as T;
 }
-const KEY_ATTRS = ['pk', 'sk', 'gsi1pk', 'gsi1sk', 'gsi2pk', 'gsi2sk', 'ttl', 'kind'] as const;
+const KEY_ATTRS = ['pk', 'sk', 'gsi1pk', 'gsi1sk', 'gsi2pk', 'gsi2sk', 'gsi3pk', 'gsi3sk', 'ttl', 'kind'] as const;
+
+// Only user-made items enter the catalog index; cached Open Food Facts products are searched live.
+function catalogKeys(item: { id: string; status: string; updatedAt: string; ownerId?: string; source?: string }) {
+  const tracked = item.status === 'pending' || item.status === 'approved';
+  if (!tracked || item.source === 'off') return {};
+  return { gsi3pk: `CATALOG#${item.status}`, gsi3sk: `${item.updatedAt}#${item.id}` };
+}
 
 export class DynamoRepository implements Repository {
   private readonly db: DynamoDBDocumentClient;
@@ -63,6 +71,7 @@ export class DynamoRepository implements Repository {
           pk: `DISH#${d.id}`,
           sk: 'META',
           kind: 'dish',
+          ...catalogKeys(d),
           ...(d.ownerId ? { gsi2pk: `OWNER#${d.ownerId}`, gsi2sk: `DISH#${d.updatedAt}#${d.id}` } : {}),
         },
       }),
@@ -101,6 +110,7 @@ export class DynamoRepository implements Repository {
           pk: productPk(p.id),
           sk: 'META',
           kind: 'product',
+          ...catalogKeys(p),
           ...(p.barcode ? { gsi1pk: `BARCODE#${p.barcode}`, gsi1sk: `${p.status}#${p.id}` } : {}),
           ...(p.ownerId
             ? { gsi2pk: `OWNER#${p.ownerId}`, gsi2sk: `PRODUCT#${p.updatedAt}#${p.id}` }
@@ -133,6 +143,18 @@ export class DynamoRepository implements Repository {
       ExpressionAttributeValues: { ':pk': `BARCODE#${barcode}` },
     });
     return items.map((i) => strip<StoredProduct>(i, KEY_ATTRS));
+  }
+
+  async listCatalog(status: CatalogStatus) {
+    const items = await this.queryAll({
+      IndexName: 'gsi3',
+      KeyConditionExpression: 'gsi3pk = :pk',
+      ExpressionAttributeValues: { ':pk': `CATALOG#${status}` },
+    });
+    return {
+      products: items.filter((i) => i.kind === 'product').map((i) => strip<StoredProduct>(i, KEY_ATTRS)),
+      dishes: items.filter((i) => i.kind === 'dish').map((i) => strip<StoredDish>(i, KEY_ATTRS)),
+    };
   }
 
   async listEntries(uid: string, from: IsoDate, to: IsoDate) {

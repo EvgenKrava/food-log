@@ -3,6 +3,7 @@ import type {
   CatalogItem,
   CreateDiaryEntryRequest,
   CreateProductRequest,
+  ModerationQueueResponse,
   ScanImageRequest,
   ScanResponse,
   DiaryDay,
@@ -53,6 +54,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
+export type CatalogKind = 'products' | 'dishes';
+
 export type Me = { email: string; hasAccess: boolean; isAdmin: boolean };
 
 export const api = {
@@ -74,6 +77,12 @@ export const api = {
   createDish: (body: CreateDishRequest) => request<Dish>('POST', '/dishes', body),
   updateDish: (id: string, body: UpdateDishRequest) => request<Dish>('PUT', `/dishes/${id}`, body),
   deleteDish: (id: string) => request<undefined>('DELETE', `/dishes/${id}`),
+  setPublished: (kind: CatalogKind, id: string, publish: boolean) =>
+    request<unknown>('POST', `/${kind}/${id}/${publish ? 'publish' : 'unpublish'}`),
+  adminQueue: () => request<ModerationQueueResponse>('GET', '/admin/queue'),
+  adminPublished: () => request<{ products: Product[]; dishes: Dish[] }>('GET', '/admin/published'),
+  moderate: (kind: CatalogKind, id: string, action: 'approve' | 'reject' | 'hide', reason?: string) =>
+    request<unknown>('POST', `/admin/${kind}/${id}/${action}`, reason === undefined ? undefined : { reason }),
   profile: () => request<ProfileResponse>('GET', '/profile'),
   putProfile: (body: PutProfileRequest) => request<unknown>('PUT', '/profile', body),
   putWeight: (date: string, kg: number) => request<WeightEntry>('PUT', `/weight/${date}`, { kg }),

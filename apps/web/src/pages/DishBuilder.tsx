@@ -4,7 +4,7 @@ import { ArrowLeft, Plus, Search, Trash2 } from 'lucide-react';
 import type { CatalogItem, Nutrients } from '@foodlog/contracts';
 import { computeDish } from '@foodlog/domain';
 import { api } from '../api';
-import { ErrorNote, Header, MacroLine, Sheet, kcalText } from '../components';
+import { ErrorNote, Header, MacroLine, ShareSwitch, Sheet, kcalText } from '../components';
 import { grams, kcal } from '../format';
 import { tr } from '../i18n';
 import { navigate, useLocation } from '../router';
@@ -42,6 +42,8 @@ export function DishBuilderPage() {
     }
   }, [rows, cooked]);
 
+  const [share, setShare] = useState(false);
+
   const save = useMutation({
     mutationFn: () => {
       const body = {
@@ -49,7 +51,7 @@ export function DishBuilderPage() {
         ingredients: rows.map((r) => ({ productId: r.productId, grams: num(r.grams) })),
         ...(cooked ? { cookedWeightG: num(cooked) } : {}),
       };
-      return id ? api.updateDish(id, body) : api.createDish({ ...body, publish: false });
+      return id ? api.updateDish(id, body) : api.createDish({ ...body, publish: share });
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['myItems'] });
@@ -107,6 +109,11 @@ export function DishBuilderPage() {
             <span className="ot-h2 ot-num">{kcalText(computed.totals.kcal)}</span>
             <span className="ot-label ot-num">{tr('На 100 г')}: {kcal(computed.per100g.kcal)} {tr('ккал')} · <MacroLine n={computed.per100g} /></span>
           </section>
+        )}
+        {!id && (
+          <div className="ot-card">
+            <ShareSwitch checked={share} onChange={setShare} />
+          </div>
         )}
         <ErrorNote error={save.error ?? existing.error} />
         <button className="ot-btn ot-btn--block" type="submit" disabled={!valid || save.isPending}>

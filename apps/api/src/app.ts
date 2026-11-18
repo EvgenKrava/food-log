@@ -12,6 +12,8 @@ import {
   HTTP_STATUS_BY_ERROR_CODE,
   IsoDateSchema,
   ProductIdSchema,
+  RejectRequestSchema,
+  type ModerationQueueItem,
   ScanImageRequestSchema,
   type ScanResponse,
   PutProfileRequestSchema,
@@ -33,6 +35,11 @@ import {
 } from '@foodlog/contracts';
 import {
   DomainError,
+  applyModeration,
+  deletionMode,
+  hasKcalMismatch,
+  type ModerationActor,
+  type ModerationEvent,
   computeDish,
   computeTargets,
   deriveRecents,
@@ -96,6 +103,7 @@ function toProduct(p: StoredProduct, uid: string): Product {
     per100g: p.per100g,
     source: p.source,
     status: p.status,
+    ...(p.rejectReason ? { rejectReason: p.rejectReason } : {}),
     isOwn: p.ownerId === uid,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
@@ -131,6 +139,12 @@ function offToStored(o: OffProduct, now: string): StoredProduct {
   };
 }
 
+function withoutOwner<T extends { ownerId?: string }>(item: T): T {
+  const copy = { ...item };
+  delete copy.ownerId;
+  return copy;
+}
+
 /** A catalog item the caller may see: public, or their own. */
 const visibleTo = (p: { status: string; ownerId?: string }, uid: string) =>
   p.status === 'approved' || p.ownerId === uid;
@@ -145,6 +159,7 @@ function toDish(d: StoredDish, uid: string): Dish {
     weightG: d.weightG,
     per100g: d.per100g,
     status: d.status,
+    ...(d.rejectReason ? { rejectReason: d.rejectReason } : {}),
     isOwn: d.ownerId === uid,
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
@@ -238,7 +253,9 @@ export function createApp(deps: Deps) {
     if (!user) return c.json({ error: { code: 'FORBIDDEN', message: 'unauthorized' } }, 401);
     c.set('user', user);
     if (c.req.path === '/api/me') return next();
-    if (!user.groups.includes(ACCESS_GROUP)) fail('FORBIDDEN', 'no_access');
+    const isAdmin = user.groups.includes(ADMIN_GROUP);
+    if (!user.groups.includes(ACCESS_GROUP) && !isAdmin) fail('FORBIDDEN', 'no_access');
+    if (c.req.path.startsWith('/api/admin/') && !isAdmin) fail('FORBIDDEN', 'admin only');
     return next();
   });
 
@@ -246,7 +263,7 @@ export function createApp(deps: Deps) {
     const u = c.get('user');
     return c.json({
       email: u.email,
-      hasAccess: u.groups.includes(ACCESS_GROUP),
+      hasAccess: u.groups.includes(ACCESS_GROUP) || u.groups.includes(ADMIN_GROUP),
       isAdmin: u.groups.includes(ADMIN_GROUP),
     });
   });
@@ -409,12 +426,14 @@ export function createApp(deps: Deps) {
     const q = parse(SearchQuerySchema, c.req.query());
     const query = q.q.trim();
     if (!query) return c.json({ items: await recents(uid) });
-    const dishes =
-      q.type === 'product'
-        ? []
-        : (await repo.listOwnDishes(uid))
-            .filter((d) => matchesAllPrefixes(d.name, query))
-            .map((d) => dishItem(d, uid));
+    const [ownDishes, shared] = await Promise.all([
+      q.type === 'product' ? Promise.resolve([]) : repo.listOwnDishes(uid),
+      repo.listCatalog('approved'),
+    ]);
+    const othersDishes = q.type === 'product' ? [] : shared.dishes.filter((d) => d.ownerId !== uid);
+    const dishes = [...ownDishes, ...othersDishes]
+      .filter((d) => matchesAllPrefixes(d.name, query))
+      .map((d) => dishItem(d, uid));
     if (q.type === 'dish') return c.json({ items: dishes });
 
     const barcode = /^\d{8,14}$/.test(query) ? normalizeBarcode(query) : undefined;
@@ -427,7 +446,7 @@ export function createApp(deps: Deps) {
             return [] as OffProduct[];
           }),
     ]);
-    const mine = own.filter((p) =>
+    const mine = [...own, ...shared.products.filter((p) => p.ownerId !== uid)].filter((p) =>
       barcode ? p.barcode === barcode : matchesAllPrefixes(`${p.name} ${p.brand ?? ''}`, query),
     );
     const now = nowIso();
@@ -575,7 +594,6 @@ export function createApp(deps: Deps) {
     return c.body(null, 204);
   });
 
-  /** Removes the caller's FoodLog data; the Only Tools account itself stays. */
   app.post('/scans', async (c) => {
     const req = parse(ScanImageRequestSchema, await c.req.json().catch(() => null));
     if (!deps.labels) return fail('UPSTREAM_UNAVAILABLE', 'label scanning is not configured');
@@ -591,13 +609,113 @@ export function createApp(deps: Deps) {
     return c.json(body);
   });
 
+  // ---- moderation: the author publishes, an admin approves, rejects or hides ----
+  async function moderate<T extends StoredProduct | StoredDish>(
+    item: T,
+    event: ModerationEvent<null>,
+    actor: ModerationActor,
+    save: (next: T) => Promise<void>,
+  ): Promise<T> {
+    const state = { status: item.status, ...(item.rejectReason ? { rejectReason: item.rejectReason } : {}) };
+    const r = applyModeration<null>(state, null, event, actor);
+    if (!r.ok) return fail(r.code, r.message);
+    const next: T = { ...item, status: r.state.status, updatedAt: nowIso() };
+    if (r.state.rejectReason) next.rejectReason = r.state.rejectReason;
+    else delete next.rejectReason;
+    await save(next);
+    return next;
+  }
+  const saveProduct = (p: StoredProduct) => repo.putProduct(p);
+  const saveDish = (d: StoredDish) => repo.putDish(d);
+  const authorEvent = (action: string): ModerationEvent<null> =>
+    action === 'publish' ? { type: 'publish', at: nowIso() } : { type: 'unpublish' };
+
+  app.post('/products/:id/:action{publish|unpublish}', async (c) => {
+    const uid = c.get('user').sub;
+    const p = await ownProduct(c.req.param('id'), uid);
+    return c.json(toProduct(await moderate(p, authorEvent(c.req.param('action')), 'author', saveProduct), uid));
+  });
+
+  app.post('/dishes/:id/:action{publish|unpublish}', async (c) => {
+    const uid = c.get('user').sub;
+    const d = await ownDish(c.req.param('id'), uid);
+    return c.json(toDish(await moderate(d, authorEvent(c.req.param('action')), 'author', saveDish), uid));
+  });
+
+  async function adminEvent(c: Context, action: string): Promise<ModerationEvent<null>> {
+    if (action === 'reject') {
+      const { reason } = parse(RejectRequestSchema, await c.req.json().catch(() => null));
+      return { type: 'reject', reason };
+    }
+    return action === 'approve' ? { type: 'approve' } : { type: 'hide' };
+  }
+
+  app.get('/admin/queue', async (c) => {
+    const uid = c.get('user').sub;
+    const { products, dishes } = await repo.listCatalog('pending');
+    const items: ModerationQueueItem[] = [
+      ...(await Promise.all(
+        products.map(async (p): Promise<ModerationQueueItem> => {
+          const twin = p.barcode
+            ? (await repo.findByBarcode(p.barcode)).find((o) => o.id !== p.id && o.status === 'approved')
+            : undefined;
+          return {
+            type: 'product',
+            product: toProduct(p, uid),
+            isRevision: false,
+            kcalMismatch: hasKcalMismatch(p.per100g),
+            photoUrl: null,
+            duplicate: twin ? toProduct(twin, uid) : null,
+          };
+        }),
+      )),
+      ...dishes.map(
+        (d): ModerationQueueItem => ({
+          type: 'dish',
+          dish: toDish(d, uid),
+          isRevision: false,
+          kcalMismatch: hasKcalMismatch(d.per100g),
+        }),
+      ),
+    ];
+    return c.json({ items });
+  });
+
+  app.get('/admin/published', async (c) => {
+    const uid = c.get('user').sub;
+    const { products, dishes } = await repo.listCatalog('approved');
+    return c.json({
+      products: products.map((p) => toProduct(p, uid)),
+      dishes: dishes.map((d) => toDish(d, uid)),
+    });
+  });
+
+  app.post('/admin/products/:id/:action{approve|reject|hide}', async (c) => {
+    const uid = c.get('user').sub;
+    const p = await repo.getProduct(parse(ProductIdSchema, c.req.param('id')));
+    if (!p || p.source !== 'user') return fail('NOT_FOUND', 'Product not found');
+    const event = await adminEvent(c, c.req.param('action'));
+    return c.json(toProduct(await moderate(p, event, 'admin', saveProduct), uid));
+  });
+
+  app.post('/admin/dishes/:id/:action{approve|reject|hide}', async (c) => {
+    const uid = c.get('user').sub;
+    const d = await repo.getDish(parse(UlidSchema, c.req.param('id')));
+    if (!d) return fail('NOT_FOUND', 'Dish not found');
+    const event = await adminEvent(c, c.req.param('action'));
+    return c.json(toDish(await moderate(d, event, 'admin', saveDish), uid));
+  });
+
+  /** Removes the caller's FoodLog data; the Only Tools account itself stays. Public items stay, unattributed. */
   app.delete('/me', async (c) => {
     const uid = c.get('user').sub;
     for (const p of await repo.listOwnProducts(uid)) {
-      if (p.status !== 'approved') await repo.deleteProduct(p.id);
+      if (deletionMode(p.status) === 'delete') await repo.deleteProduct(p.id);
+      else await repo.putProduct(withoutOwner(p));
     }
     for (const d of await repo.listOwnDishes(uid)) {
-      if (d.status !== 'approved') await repo.deleteDish(d.id);
+      if (deletionMode(d.status) === 'delete') await repo.deleteDish(d.id);
+      else await repo.putDish(withoutOwner(d));
     }
     await repo.deleteUserData(uid);
     return c.body(null, 204);

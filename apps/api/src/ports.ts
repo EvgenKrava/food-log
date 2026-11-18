@@ -19,6 +19,7 @@ export type StoredProduct = {
   source: ProductSource;
   ownerId?: string;
   status: ModerationStatus;
+  rejectReason?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -33,6 +34,7 @@ export type StoredDish = {
   weightG: number;
   per100g: Nutrients;
   status: ModerationStatus;
+  rejectReason?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -48,6 +50,9 @@ export interface Repository {
   deleteProduct(id: string): Promise<void>;
   listOwnProducts(ownerId: string): Promise<StoredProduct[]>;
   findByBarcode(barcode: string): Promise<StoredProduct[]>;
+
+  /** User-made products and dishes in a shared-catalog status, oldest change first. */
+  listCatalog(status: CatalogStatus): Promise<{ products: StoredProduct[]; dishes: StoredDish[] }>;
 
   listEntries(uid: string, from: IsoDate, to: IsoDate): Promise<DiaryEntry[]>;
   getEntry(uid: string, date: IsoDate, id: string): Promise<DiaryEntry | null>;
@@ -71,6 +76,9 @@ export interface Repository {
    */
   consumeScanQuota(uid: string, day: IsoDate, limits: ScanLimits, expiresAt: number): Promise<boolean>;
 }
+
+/** Statuses the shared-catalog index tracks: the moderation queue and the public catalog. */
+export type CatalogStatus = 'pending' | 'approved';
 
 export type ScanLimits = { perUser: number; global: number };
 

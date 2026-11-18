@@ -1,6 +1,6 @@
 import { tr } from './i18n';
 import { useEffect, type ReactNode } from 'react';
-import type { Nutrients } from '@foodlog/contracts';
+import type { ModerationStatus, Nutrients } from '@foodlog/contracts';
 import { grams, kcal } from './format';
 
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -49,4 +49,39 @@ export function ErrorNote({ error }: { error: unknown }) {
   if (!error) return null;
   const message = error instanceof Error ? error.message : tr('Щось пішло не так');
   return <p className="ot-chip ot-chip--bad self-start">{message}</p>;
+}
+
+const STATUS_CHIP: Record<ModerationStatus, string> = {
+  private: 'ot-chip--neutral',
+  pending: 'ot-chip--warn',
+  approved: 'ot-chip--good',
+  rejected: 'ot-chip--bad',
+  hidden: 'ot-chip--neutral',
+};
+
+export function statusLabel(status: ModerationStatus): string {
+  return {
+    private: tr('Лише для вас'),
+    pending: tr('На перевірці'),
+    approved: tr('Доступно всім'),
+    rejected: tr('Відхилено'),
+    hidden: tr('Приховано модератором'),
+  }[status];
+}
+
+export function StatusChip({ status }: { status: ModerationStatus }) {
+  return <span className={`ot-chip ${STATUS_CHIP[status]}`}>{statusLabel(status)}</span>;
+}
+
+/** Opt-in to the shared catalog: the item goes to moderation first. */
+export function ShareSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-center justify-between gap-3">
+      <span className="flex flex-col">
+        <span className="ot-label">{tr('Поділитися з усіма')}</span>
+        <span className="ot-hint">{tr('Після перевірки модератором інші зможуть знайти це в пошуку.')}</span>
+      </span>
+      <input type="checkbox" role="switch" className="ot-switch" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    </label>
+  );
 }

@@ -13,7 +13,7 @@ import { hasKcalMismatch, kcalFromMacros } from '@foodlog/domain';
 import { tr } from '../i18n';
 import { ApiError, api } from '../api';
 import { photoToJpegBase64 } from '../photo';
-import { ErrorNote, Header } from '../components';
+import { ErrorNote, Header, ShareSwitch } from '../components';
 import { kcal as fmtKcal, localDate } from '../format';
 import { navigate, useLocation } from '../router';
 import { GramsSheet } from './GramsSheet';
@@ -52,6 +52,7 @@ export function ProductFormPage() {
   });
   const [created, setCreated] = useState<Product | null>(null);
   const [warnings, setWarnings] = useState<DraftWarning[]>([]);
+  const [share, setShare] = useState(false);
   const photoInput = useRef<HTMLInputElement>(null);
 
   const scan = useMutation({
@@ -83,7 +84,7 @@ export function ProductFormPage() {
     ...(f.barcode.trim() ? { barcode: f.barcode.replace(/\D/g, '') } : {}),
     ...(f.serving.trim() ? { servingSizeG: num(f.serving) } : {}),
     per100g,
-    publish: false,
+    publish: share,
   };
   const parsed = CreateProductRequestSchema.safeParse(request);
   const issues = parsed.success ? [] : parsed.error.issues.map((i) => i.path.join('.'));
@@ -161,6 +162,9 @@ export function ProductFormPage() {
             </p>
           )}
           {field('serving', tr('Порція, г (необовʼязково)'), { decimal: true })}
+        </div>
+        <div className="ot-card">
+          <ShareSwitch checked={share} onChange={setShare} />
         </div>
         <ErrorNote error={save.error} />
         <button className="ot-btn ot-btn--block" type="submit" disabled={!parsed.success || save.isPending}>

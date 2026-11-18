@@ -335,3 +335,67 @@ describe('dishes', () => {
     expect((await call('DELETE', `/dishes/${dish.id}`)).status).toBe(204);
   });
 });
+
+describe('moderation', () => {
+  const ADMIN: AuthUser = { sub: '33333333-3333-3333-3333-333333333333', email: 'm@x.io', groups: ['foodlog-admin'] };
+  const product = { name: 'Хліб житній', per100g: { kcal: 220, protein: 7, fat: 1, carbs: 45 } };
+
+  it('publishes, approves and then shows the product to other people', async () => {
+    const { call, as } = setup();
+    const { body: p } = await call('POST', '/products', { ...product, publish: false });
+    expect((await call('POST', `/products/${p.id}/publish`)).body.status).toBe('pending');
+
+    as(BOB);
+    expect((await call('GET', '/search?q=хліб')).body.items).toHaveLength(0);
+    expect((await call('GET', '/admin/queue')).status).toBe(403);
+
+    as(ADMIN);
+    const queue = (await call('GET', '/admin/queue')).body.items;
+    expect(queue.map((i: { product: { id: string } }) => i.product.id)).toEqual([p.id]);
+    expect((await call('POST', `/admin/products/${p.id}/approve`)).body.status).toBe('approved');
+    expect((await call('GET', '/admin/queue')).body.items).toHaveLength(0);
+
+    as(BOB);
+    const found = (await call('GET', '/search?q=хліб')).body.items;
+    expect(found.map((i: { id: string }) => i.id)).toEqual([p.id]);
+    expect(found[0].isOwn).toBe(false);
+
+    as(ADMIN);
+    expect((await call('POST', `/admin/products/${p.id}/hide`)).body.status).toBe('hidden');
+    as(BOB);
+    expect((await call('GET', '/search?q=хліб')).body.items).toHaveLength(0);
+  });
+
+  it('rejects with a reason the author can see and lets them resubmit', async () => {
+    const { call, as } = setup();
+    const { body: d } = await call('POST', '/products', { ...product, publish: true });
+    as(ADMIN);
+    expect((await call('POST', `/admin/products/${d.id}/reject`, { reason: 'ok' })).status).toBe(400);
+    await call('POST', `/admin/products/${d.id}/reject`, { reason: 'Перевірте калорійність' });
+    as(ALICE);
+    const mine = (await call('GET', '/me/items')).body.products[0];
+    expect(mine).toMatchObject({ status: 'rejected', rejectReason: 'Перевірте калорійність' });
+    const again = (await call('POST', `/products/${d.id}/publish`)).body;
+    expect(again.status).toBe('pending');
+    expect(again.rejectReason).toBeUndefined();
+  });
+
+  it('stops authors from approving their own items and others from publishing', async () => {
+    const { call, as } = setup();
+    const { body: p } = await call('POST', '/products', { ...product, publish: true });
+    expect((await call('POST', `/admin/products/${p.id}/approve`)).status).toBe(403);
+    as(BOB);
+    expect((await call('POST', `/products/${p.id}/unpublish`)).status).toBe(404);
+  });
+
+  it('keeps approved items, unattributed, when the author deletes their data', async () => {
+    const { call, as, repo } = setup();
+    const { body: p } = await call('POST', '/products', { ...product, publish: true });
+    as(ADMIN);
+    await call('POST', `/admin/products/${p.id}/approve`);
+    as(ALICE);
+    expect((await call('DELETE', '/me')).status).toBe(204);
+    expect(repo.products.get(p.id)?.ownerId).toBeUndefined();
+    expect(repo.products.get(p.id)?.status).toBe('approved');
+  });
+});

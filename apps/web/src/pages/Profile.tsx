@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LogOut } from 'lucide-react';
+import { LogOut, ShieldCheck } from 'lucide-react';
+import { navigate } from '../router';
 import { PutProfileRequestSchema, type Activity, type Goal, type Sex } from '@foodlog/contracts';
 import { LOCALES, LOCALE_NAMES, tr, useI18n, type Locale } from '../i18n';
 import { api } from '../api';
@@ -19,7 +20,7 @@ const ACTIVITY: Record<Activity, string> = {
 };
 const GOAL: Record<Goal, string> = { lose: 'Схуднути', maintain: 'Тримати вагу', gain: 'Набрати масу' };
 
-export function ProfilePage({ email }: { email: string }) {
+export function ProfilePage({ email, isAdmin }: { email: string; isAdmin: boolean }) {
   const auth = useAuth();
   const { locale, setLocale } = useI18n();
   const qc = useQueryClient();
@@ -166,6 +167,11 @@ export function ProfilePage({ email }: { email: string }) {
             </select>
           </label>
           <p className="ot-text">{email}</p>
+          {isAdmin && (
+            <a className="ot-btn ot-btn--outline" href="/admin" onClick={(e) => { e.preventDefault(); navigate('/admin'); }}>
+              <ShieldCheck className="ot-icon" />{tr('Модерація каталогу')}
+            </a>
+          )}
           <a className="ot-btn ot-btn--outline" href={config.hubUrl}>{tr('Інші інструменти Only Tools')}</a>
           <button className="ot-btn ot-btn--outline" onClick={() => { void auth.removeUser(); window.location.assign(logoutUrl()); }}>
             <LogOut className="ot-icon" />{tr('Вийти')}

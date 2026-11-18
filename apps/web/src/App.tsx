@@ -9,6 +9,7 @@ import { navigate, useLocation } from './router';
 import { TodayPage } from './pages/Today';
 import { AddPage } from './pages/Add';
 import { ProductFormPage } from './pages/ProductForm';
+import { AdminPage } from './pages/Admin';
 import { CatalogPage } from './pages/Catalog';
 import { DishBuilderPage } from './pages/DishBuilder';
 import { StatsPage } from './pages/Stats';
@@ -94,7 +95,8 @@ export function App() {
   else if (path === '/catalog') page = <CatalogPage />;
   else if (path.startsWith('/dishes/')) page = <DishBuilderPage />;
   else if (path === '/stats') page = <StatsPage />;
-  else if (path === '/profile') page = <ProfilePage email={me.data.email} />;
+  else if (path === '/profile') page = <ProfilePage email={me.data.email} isAdmin={me.data.isAdmin} />;
+  else if (path === '/admin' && me.data.isAdmin) page = <AdminPage />;
   else page = <TodayPage />;
 
   const navItem = (t: (typeof tabs)[number]) => (

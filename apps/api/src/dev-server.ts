@@ -16,7 +16,8 @@ const app = createApp({
   identify: () => ({
     sub: '00000000-0000-4000-8000-000000000001',
     email: 'dev@localhost',
-    groups: ['foodlog-user'],
+    // DEV_ADMIN=1 also makes the test user a catalog moderator.
+    groups: process.env.DEV_ADMIN === '1' ? ['foodlog-user', 'foodlog-admin'] : ['foodlog-user'],
   }),
 });
 
