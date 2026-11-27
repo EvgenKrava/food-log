@@ -2,6 +2,8 @@
 
 html, body, #root { height: 100%; margin: 0; }
 body { overscroll-behavior-y: none; }
+/* Long product names and brands without spaces must wrap, not push the page sideways. */
+.ot-h1, .ot-h2, .ot-h3, .ot-text, .ot-hint, .ot-label { overflow-wrap: anywhere; }
 
 .fl-sheet-backdrop { position: fixed; inset: 0; z-index: 20; background: rgb(23 20 31 / 0.45); display: flex; align-items: flex-end; justify-content: center; }
 .fl-sheet {

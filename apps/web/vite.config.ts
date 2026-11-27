@@ -15,6 +15,7 @@ export default defineConfig({
         short_name: 'FoodLog',
         lang: 'uk',
         start_url: '/',
+        scope: '/',
         display: 'standalone',
         background_color: '#fff8f1',
         theme_color: '#fff8f1',
