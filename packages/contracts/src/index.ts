@@ -12,3 +12,4 @@ export * from './stats.ts';
 export * from './uploads.ts';
 export * from './moderation.ts';
 export * from './me.ts';
+export * from './photos.ts';

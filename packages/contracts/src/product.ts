@@ -35,6 +35,7 @@ export const ProductSchema = ProductFieldsSchema.extend({
   isOwn: z.boolean(),
   rejectReason: z.string().optional(),
   pendingRevision: ProductFieldsSchema.optional(),
+  /** The caller's own photo of this product, if they added one. */
   photoUrl: z.url().optional(),
   createdAt: IsoDateTimeSchema,
   updatedAt: IsoDateTimeSchema,

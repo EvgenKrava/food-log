@@ -5,6 +5,8 @@ import type {
   ModerationStatus,
   Nutrients,
   Profile,
+  ItemType,
+  PhotoUploadResponse,
   ProductSource,
   WeightEntry,
 } from '@foodlog/contracts';
@@ -39,6 +41,9 @@ export type StoredDish = {
   updatedAt: string;
 };
 
+/** One person's own photo of a product or dish; lives under USER#<uid>, so deleting their data drops it. */
+export type StoredPhoto = { type: ItemType; itemId: string; key: string; updatedAt: string };
+
 export interface Repository {
   getDish(id: string): Promise<StoredDish | null>;
   putDish(dish: StoredDish): Promise<void>;
@@ -67,7 +72,12 @@ export interface Repository {
   putWeight(uid: string, entry: WeightEntry, expiresAt: number | undefined): Promise<void>;
   deleteWeight(uid: string, date: IsoDate): Promise<void>;
 
-  /** Removes every USER#<uid> item (diary, weight, profile). */
+  listPhotos(uid: string): Promise<StoredPhoto[]>;
+  getPhoto(uid: string, type: ItemType, itemId: string): Promise<StoredPhoto | null>;
+  putPhoto(uid: string, photo: StoredPhoto): Promise<void>;
+  deletePhoto(uid: string, type: ItemType, itemId: string): Promise<void>;
+
+  /** Removes every USER#<uid> item (diary, weight, profile, photo records). */
   deleteUserData(uid: string): Promise<void>;
 
   /**
@@ -101,6 +111,22 @@ export type OffProduct = {
 export interface FoodFacts {
   search(query: string): Promise<OffProduct[]>;
   byBarcode(barcode: string): Promise<OffProduct | null>;
+}
+
+/** Where item photos live (S3 in production). Keys are `photos/<uid>/<ulid>.jpg` once attached. */
+export interface PhotoStore {
+  /** A presigned upload for `uploads/<uid>/<id>.jpg`; unattached uploads expire on their own. */
+  presignUpload(uid: string, id: string): Promise<PhotoUploadResponse>;
+  /**
+   * Moves an upload to its permanent key and returns that key.
+   * Throws DomainError NOT_FOUND when nothing was uploaded under `uploadKey`.
+   */
+  attach(uploadKey: string, uid: string, id: string): Promise<string>;
+  remove(key: string): Promise<void>;
+  /** Deletes every photo and pending upload of one person. */
+  removeAll(uid: string): Promise<void>;
+  /** The URL the browser shows the photo from. */
+  url(key: string): string;
 }
 
 export type Clock = () => Date;

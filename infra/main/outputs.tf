@@ -4,3 +4,4 @@ output "app_url" { value = local.app_url }
 output "table_name" { value = aws_dynamodb_table.main.name }
 output "cognito_client_id" { value = nonsensitive(data.aws_ssm_parameter.client.value) }
 output "cognito_authority" { value = nonsensitive(data.aws_ssm_parameter.issuer.value) }
+output "photo_bucket" { value = aws_s3_bucket.photos.bucket }

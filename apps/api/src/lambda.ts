@@ -5,9 +5,13 @@ import { DynamoRepository } from './dynamo-repo.ts';
 import { BedrockLabelReader } from './label-reader.ts';
 import { HttpFoodFacts } from './off.ts';
 import { cachedPlanLimits } from './plans.ts';
+import { S3PhotoStore } from './s3-photos.ts';
 
 const table = process.env.TABLE_NAME;
 if (!table) throw new Error('TABLE_NAME is not set');
+
+const photoBucket = process.env.PHOTO_BUCKET;
+const publicUrl = process.env.PUBLIC_URL;
 
 const ssm = new SSMClient({});
 const limitsParam = process.env.PLAN_LIMITS_PARAM ?? '/onlytools/plans/limits';
@@ -26,6 +30,7 @@ const app = createApp({
   off: new HttpFoodFacts(),
   clock: () => new Date(),
   planLimits,
+  ...(photoBucket && publicUrl ? { photos: new S3PhotoStore(photoBucket, publicUrl) } : {}),
   labels: new BedrockLabelReader(process.env.LABEL_MODEL || undefined),
   scanLimits: {
     perUser: 3,

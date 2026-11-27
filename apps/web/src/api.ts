@@ -17,7 +17,11 @@ import type {
   StatsResponse,
   UpdateDiaryEntryRequest,
   WeightEntry,
+  ItemType,
+  PhotoResponse,
+  PhotoUploadResponse,
 } from '@foodlog/contracts';
+import { photoToJpegBlob } from './photo';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -100,4 +104,18 @@ export const api = {
     request<{ entries: WeightEntry[] }>('GET', `/weight?from=${from}&to=${to}`),
   stats: (from: string, to: string) => request<StatsResponse>('GET', `/stats?from=${from}&to=${to}`),
   deleteMyData: () => request<undefined>('DELETE', '/me'),
+  /** Shrinks the photo, uploads it straight to storage, then attaches it to the item. */
+  setPhoto: async (type: ItemType, id: string, file: File): Promise<PhotoResponse> => {
+    const [blob, upload] = await Promise.all([
+      photoToJpegBlob(file),
+      request<PhotoUploadResponse>('POST', '/photos/uploads'),
+    ]);
+    const form = new FormData();
+    for (const [k, v] of Object.entries(upload.fields)) form.append(k, v);
+    form.append('file', blob, 'photo.jpg');
+    const res = await fetch(upload.url, { method: 'POST', body: form });
+    if (!res.ok) throw new ApiError(res.status, 'UPSTREAM_UNAVAILABLE', tr('Не вдалося завантажити фото'));
+    return request<PhotoResponse>('PUT', `/photos/${type}/${encodeURIComponent(id)}`, { key: upload.key });
+  },
+  removePhoto: (type: ItemType, id: string) => request<undefined>('DELETE', `/photos/${type}/${encodeURIComponent(id)}`),
 };

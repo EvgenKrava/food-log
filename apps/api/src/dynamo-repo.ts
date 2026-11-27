@@ -9,13 +9,21 @@ import {
   type QueryCommandInput,
   TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
-import type { DiaryEntry, IsoDate, Profile, WeightEntry } from '@foodlog/contracts';
-import type { CatalogStatus, Repository, ScanLimits, StoredDish, StoredProduct } from './ports.ts';
+import type { DiaryEntry, IsoDate, ItemType, Profile, WeightEntry } from '@foodlog/contracts';
+import type {
+  CatalogStatus,
+  Repository,
+  ScanLimits,
+  StoredDish,
+  StoredPhoto,
+  StoredProduct,
+} from './ports.ts';
 
 // Single table (spec §7). Keys: pk/sk; gsi1 = barcode lookup; gsi2 = owner's items;
 // gsi3 = shared catalog (user items that are pending review or public). TTL attribute `ttl`.
 const userPk = (uid: string) => `USER#${uid}`;
 const productPk = (id: string) => `PRODUCT#${id}`;
+const photoSk = (type: ItemType, itemId: string) => `PHOTO#${type}#${itemId}`;
 
 type Item = Record<string, unknown>;
 
@@ -246,6 +254,36 @@ export class DynamoRepository implements Repository {
   async deleteWeight(uid: string, date: IsoDate) {
     await this.db.send(
       new DeleteCommand({ TableName: this.table, Key: { pk: userPk(uid), sk: `WEIGHT#${date}` } }),
+    );
+  }
+
+  async listPhotos(uid: string) {
+    const items = await this.queryAll({
+      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :p)',
+      ExpressionAttributeValues: { ':pk': userPk(uid), ':p': 'PHOTO#' },
+    });
+    return items.map((i) => strip<StoredPhoto>(i, KEY_ATTRS));
+  }
+
+  async getPhoto(uid: string, type: ItemType, itemId: string) {
+    const res = await this.db.send(
+      new GetCommand({ TableName: this.table, Key: { pk: userPk(uid), sk: photoSk(type, itemId) } }),
+    );
+    return res.Item ? strip<StoredPhoto>(res.Item, KEY_ATTRS) : null;
+  }
+
+  async putPhoto(uid: string, photo: StoredPhoto) {
+    await this.db.send(
+      new PutCommand({
+        TableName: this.table,
+        Item: { ...photo, pk: userPk(uid), sk: photoSk(photo.type, photo.itemId), kind: 'photo' },
+      }),
+    );
+  }
+
+  async deletePhoto(uid: string, type: ItemType, itemId: string) {
+    await this.db.send(
+      new DeleteCommand({ TableName: this.table, Key: { pk: userPk(uid), sk: photoSk(type, itemId) } }),
     );
   }
 

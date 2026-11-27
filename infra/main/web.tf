@@ -88,6 +88,12 @@ resource "aws_cloudfront_distribution" "web" {
   }
 
   origin {
+    domain_name              = aws_s3_bucket.photos.bucket_regional_domain_name
+    origin_id                = "photos"
+    origin_access_control_id = aws_cloudfront_origin_access_control.web.id
+  }
+
+  origin {
     domain_name = replace(aws_apigatewayv2_api.main.api_endpoint, "https://", "")
     origin_id   = "api"
     custom_origin_config {
@@ -121,6 +127,18 @@ resource "aws_cloudfront_distribution" "web" {
     compress                   = true
     cache_policy_id            = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # AWS managed: CachingDisabled
     origin_request_policy_id   = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # AWS managed: AllViewerExceptHostHeader
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+  }
+
+  # Item photos. Keys are never reused, so they cache for good.
+  ordered_cache_behavior {
+    path_pattern               = "/photos/*"
+    allowed_methods            = ["GET", "HEAD"]
+    cached_methods             = ["GET", "HEAD"]
+    target_origin_id           = "photos"
+    viewer_protocol_policy     = "redirect-to-https"
+    compress                   = false
+    cache_policy_id            = "658327ea-f89d-4fab-a63d-7e88639e58f6" # AWS managed: CachingOptimized
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
   }
 

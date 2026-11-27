@@ -41,6 +41,20 @@ data "aws_iam_policy_document" "api" {
     actions   = ["ssm:GetParameter"]
     resources = ["arn:aws:ssm:${var.region}:${local.account_id}:parameter/onlytools/plans/limits"]
   }
+  # Item photos: presigned uploads to uploads/, copied to photos/ on attach.
+  statement {
+    actions   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+    resources = ["${aws_s3_bucket.photos.arn}/uploads/*", "${aws_s3_bucket.photos.arn}/photos/*"]
+  }
+  statement {
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.photos.arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["uploads/*", "photos/*"]
+    }
+  }
   # Label scans: Haiku through the InvokeModel stack (cross-region inference profile).
   statement {
     actions = ["bedrock:InvokeModel"]
@@ -71,6 +85,8 @@ resource "aws_lambda_function" "api" {
     variables = {
       TABLE_NAME        = aws_dynamodb_table.main.name
       SCAN_LIMIT_GLOBAL = tostring(var.scan_limit_global)
+      PHOTO_BUCKET      = aws_s3_bucket.photos.bucket
+      PUBLIC_URL        = local.app_url
     }
   }
   depends_on = [aws_cloudwatch_log_group.api]

@@ -6,6 +6,7 @@ import { ErrorNote, Header, MacroLine, Skeleton, StatusChip, kcalText } from '..
 import { grams } from '../format';
 import { tr } from '../i18n';
 import { navigate, useLocation } from '../router';
+import { PhotoThumb } from '../ItemPhoto';
 
 export function CatalogPage() {
   const qc = useQueryClient();
@@ -61,6 +62,7 @@ export function CatalogPage() {
           {tab === 'products' &&
             items.data?.products.map((p) => (
               <div key={p.id} className="ot-row">
+                {p.photoUrl && <PhotoThumb url={p.photoUrl} alt={p.name} />}
                 <span className="ot-row__body">
                   <span className="ot-row__title">{p.name}</span>
                   <span className="ot-row__sub ot-num">{kcalText(p.per100g.kcal)} · <MacroLine n={p.per100g} /> {tr('на 100 г')}</span>
@@ -74,6 +76,7 @@ export function CatalogPage() {
           {tab === 'dishes' &&
             items.data?.dishes.map((d) => (
               <div key={d.id} className="ot-row">
+                {d.photoUrl && <PhotoThumb url={d.photoUrl} alt={d.name} />}
                 <span className="ot-row__body">
                   <a className="flex flex-col" href={`/dishes/${d.id}`} onClick={(e) => { e.preventDefault(); navigate(`/dishes/${d.id}`); }}>
                     <span className="ot-row__title">{d.name}</span>

@@ -1,5 +1,5 @@
-import type { DiaryEntry, IsoDate, Profile, WeightEntry } from '@foodlog/contracts';
-import type { CatalogStatus, Repository, ScanLimits, StoredDish, StoredProduct } from './ports.ts';
+import type { DiaryEntry, IsoDate, ItemType, Profile, WeightEntry } from '@foodlog/contracts';
+import type { CatalogStatus, Repository, ScanLimits, StoredDish, StoredPhoto, StoredProduct } from './ports.ts';
 
 /** In-memory Repository for tests and local development. */
 export class MemoryRepository implements Repository {
@@ -24,6 +24,21 @@ export class MemoryRepository implements Repository {
   readonly profiles = new Map<string, Profile>();
   readonly weights = new Map<string, { entry: WeightEntry; expiresAt: number | undefined }>();
   readonly scanCounts = new Map<string, number>();
+  readonly photos = new Map<string, StoredPhoto>();
+
+  private photoKey = (uid: string, type: ItemType, itemId: string) => `${uid}#${type}#${itemId}`;
+  async listPhotos(uid: string) {
+    return [...this.photos.entries()].filter(([k]) => k.startsWith(`${uid}#`)).map(([, p]) => p);
+  }
+  async getPhoto(uid: string, type: ItemType, itemId: string) {
+    return this.photos.get(this.photoKey(uid, type, itemId)) ?? null;
+  }
+  async putPhoto(uid: string, photo: StoredPhoto) {
+    this.photos.set(this.photoKey(uid, photo.type, photo.itemId), photo);
+  }
+  async deletePhoto(uid: string, type: ItemType, itemId: string) {
+    this.photos.delete(this.photoKey(uid, type, itemId));
+  }
 
   async getProduct(id: string) {
     return this.products.get(id) ?? null;
@@ -84,7 +99,7 @@ export class MemoryRepository implements Repository {
   }
 
   async deleteUserData(uid: string) {
-    for (const map of [this.entries, this.weights]) {
+    for (const map of [this.entries, this.weights, this.photos]) {
       for (const k of [...map.keys()]) if (k.startsWith(`${uid}#`)) map.delete(k);
     }
     this.profiles.delete(uid);

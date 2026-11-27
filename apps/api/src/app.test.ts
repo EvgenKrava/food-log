@@ -3,6 +3,7 @@ import { createApp } from './app.ts';
 import { cachedPlanLimits, DEFAULT_PLAN_LIMITS } from './plans.ts';
 import type { AuthUser } from './auth.ts';
 import { MemoryRepository } from './memory-repo.ts';
+import { MemoryPhotoStore } from './memory-photos.ts';
 import type { FoodFacts, LabelImage, LabelReader, OffProduct } from './ports.ts';
 import type { LabelReading } from '@foodlog/contracts';
 import { toReading } from './label-reader.ts';
@@ -29,7 +30,7 @@ class FakeOff implements FoodFacts {
 const ALICE: AuthUser = { sub: '11111111-1111-1111-1111-111111111111', email: 'a@x.io', groups: ['foodlog-user'] };
 const BOB: AuthUser = { sub: '22222222-2222-2222-2222-222222222222', email: 'b@x.io', groups: ['foodlog-user'] };
 
-function setup(user: AuthUser | null = ALICE) {
+function setup(user: AuthUser | null = ALICE, photos?: MemoryPhotoStore) {
   const repo = new MemoryRepository();
   const off = new FakeOff();
   const labels = new FakeLabels();
@@ -45,6 +46,7 @@ function setup(user: AuthUser | null = ALICE) {
     identify: () => current,
     labels,
     scanLimits: { perUser: 2, global: 3 },
+    ...(photos ? { photos } : {}),
   });
   const call = async (method: string, path: string, body?: unknown) => {
     const res = await app.request(`/api${path}`, {
@@ -444,5 +446,121 @@ describe('plans', () => {
     expect(await cachedPlanLimits(async () => undefined)()).toEqual(DEFAULT_PLAN_LIMITS);
     expect(await cachedPlanLimits(async () => '{"nope":1}')()).toEqual(DEFAULT_PLAN_LIMITS);
     expect(await cachedPlanLimits(() => Promise.reject(new Error('denied')))()).toEqual(DEFAULT_PLAN_LIMITS);
+  });
+});
+
+describe('item photos', () => {
+  const ULID = '01KAB0000000000000000000AA';
+  function withPhotos(user: AuthUser = ALICE) {
+    const photos = new MemoryPhotoStore();
+    const t = setup(user, photos);
+    const upload = async () => {
+      const res = await t.call('POST', '/photos/uploads');
+      photos.uploaded(res.body.key);
+      return res.body.key as string;
+    };
+    const product = async () =>
+      (
+        await t.call('POST', '/products', {
+          name: 'Печиво',
+          servingSizeG: 28,
+          per100g: { kcal: 450, protein: 6, fat: 18, carbs: 66 },
+          publish: false,
+        })
+      ).body
+        .id as string;
+    return { ...t, photos, upload, product };
+  }
+
+  it('attaches a photo to own product and shows it only to its author', async () => {
+    const t = withPhotos();
+    const id = await t.product();
+    const key = await t.upload();
+    expect(key).toMatch(new RegExp(`^uploads/${ALICE.sub}/`));
+    const put = await t.call('PUT', `/photos/product/${id}`, { key });
+    expect(put.status).toBe(200);
+    expect(put.body.photoUrl).toMatch(new RegExp(`^https://foodlog.test/photos/${ALICE.sub}/`));
+    expect(t.photos.objects.has(key)).toBe(false);
+
+    expect((await t.call('GET', `/products/${id}`)).body.photoUrl).toBe(put.body.photoUrl);
+    expect((await t.call('GET', '/me/items')).body.products[0].photoUrl).toBe(put.body.photoUrl);
+    const found = (await t.call('GET', '/search?q=печ')).body.items[0];
+    expect(found.photoUrl).toBe(put.body.photoUrl);
+    expect(found.servingSizeG).toBe(28);
+  });
+
+  it('works on Open Food Facts products too', async () => {
+    const t = withPhotos();
+    const put = await t.call('PUT', `/photos/product/off-${BUCKWHEAT.barcode}`, { key: await t.upload() });
+    expect(put.status).toBe(200);
+    expect((await t.call('GET', `/products/barcode/${BUCKWHEAT.barcode}`)).body.photoUrl).toBe(put.body.photoUrl);
+  });
+
+  it('keeps photos personal: another user sees none and cannot use your upload', async () => {
+    const t = withPhotos();
+    const id = await t.call('POST', '/products', { name: 'Печиво', per100g: { kcal: 450, protein: 6, fat: 18, carbs: 66 }, publish: true });
+    t.as({ sub: '33333333-3333-3333-3333-333333333333', email: 'm@x.io', groups: ['foodlog-admin'] });
+    await t.call('POST', `/admin/products/${id.body.id}/approve`);
+    t.as(ALICE);
+    const key = await t.upload();
+    await t.call('PUT', `/photos/product/${id.body.id}`, { key });
+    t.as(BOB);
+    expect((await t.call('GET', `/products/${id.body.id}`)).body.photoUrl).toBeUndefined();
+    const stolen = await t.call('PUT', `/photos/product/${id.body.id}`, { key: `uploads/${ALICE.sub}/${ULID}.jpg` });
+    expect(stolen.status).toBe(403);
+  });
+
+  it('replaces the old photo and deletes it from storage', async () => {
+    const t = withPhotos();
+    const id = await t.product();
+    const first = await t.call('PUT', `/photos/product/${id}`, { key: await t.upload() });
+    const second = await t.call('PUT', `/photos/product/${id}`, { key: await t.upload() });
+    expect(second.body.photoUrl).not.toBe(first.body.photoUrl);
+    expect([...t.photos.objects]).toEqual([second.body.photoUrl.replace('https://foodlog.test/', '')]);
+  });
+
+  it('answers 404 when nothing was uploaded', async () => {
+    const t = withPhotos();
+    const id = await t.product();
+    const res = await t.call('PUT', `/photos/product/${id}`, { key: `uploads/${ALICE.sub}/${ULID}.jpg` });
+    expect(res.status).toBe(404);
+  });
+
+  it('removes a photo, and drops it with the product', async () => {
+    const t = withPhotos();
+    const id = await t.product();
+    await t.call('PUT', `/photos/product/${id}`, { key: await t.upload() });
+    expect((await t.call('DELETE', `/photos/product/${id}`)).status).toBe(204);
+    expect((await t.call('GET', `/products/${id}`)).body.photoUrl).toBeUndefined();
+    expect(t.photos.objects.size).toBe(0);
+
+    await t.call('PUT', `/photos/product/${id}`, { key: await t.upload() });
+    await t.call('DELETE', `/products/${id}`);
+    expect(t.photos.objects.size).toBe(0);
+    expect(t.repo.photos.size).toBe(0);
+  });
+
+  it('attaches photos to dishes', async () => {
+    const t = withPhotos();
+    const productId = await t.product();
+    const dish = await t.call('POST', '/dishes', { name: 'Печиво з молоком', ingredients: [{ productId, grams: 50 }], publish: false });
+    const put = await t.call('PUT', `/photos/dish/${dish.body.id}`, { key: await t.upload() });
+    expect(put.status).toBe(200);
+    expect((await t.call('GET', `/dishes/${dish.body.id}`)).body.photoUrl).toBe(put.body.photoUrl);
+  });
+
+  it('deletes every photo with the account data', async () => {
+    const t = withPhotos();
+    const id = await t.product();
+    await t.call('PUT', `/photos/product/${id}`, { key: await t.upload() });
+    await t.upload();
+    await t.call('DELETE', '/me');
+    expect(t.photos.objects.size).toBe(0);
+    expect(t.repo.photos.size).toBe(0);
+  });
+
+  it('answers 503 when photo storage is not configured', async () => {
+    const t = setup();
+    expect((await t.call('POST', '/photos/uploads')).status).toBe(503);
   });
 });
