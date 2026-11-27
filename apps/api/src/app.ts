@@ -2,6 +2,10 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { ulid } from 'ulid';
 import {
+  AttachPhotoRequestSchema,
+  PHOTOS_PER_USER_MAX,
+  type ItemType,
+  type PhotoResponse,
   CreateDiaryEntryRequestSchema,
   CreateDishRequestSchema,
   UlidSchema,
@@ -59,6 +63,7 @@ import type {
   FoodFacts,
   LabelReader,
   OffProduct,
+  PhotoStore,
   Repository,
   ScanLimits,
   StoredDish,
@@ -74,6 +79,8 @@ export type Deps = {
   /** Reads label photos; scanning answers UPSTREAM_UNAVAILABLE without it. */
   labels?: LabelReader;
   scanLimits?: ScanLimits;
+  /** Item photos; the photo endpoints answer UPSTREAM_UNAVAILABLE without it. */
+  photos?: PhotoStore;
   /** Resolves the caller; production reads API Gateway JWT claims. */
   identify?: (c: Context) => AuthUser | null;
 };
@@ -95,8 +102,18 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
 
 const offId = (barcode: string) => `off-${barcode}`;
 
-function toProduct(p: StoredProduct, uid: string): Product {
+/** The caller's photo URLs, keyed by `photoRef(type, id)`. */
+type PhotoUrls = ReadonlyMap<string, string>;
+const NO_PHOTOS: PhotoUrls = new Map();
+const photoRef = (type: ItemType, id: string) => `${type}:${id}`;
+const photoOf = (photos: PhotoUrls, type: ItemType, id: string) => {
+  const url = photos.get(photoRef(type, id));
+  return url ? { photoUrl: url } : {};
+};
+
+function toProduct(p: StoredProduct, uid: string, photos: PhotoUrls = NO_PHOTOS): Product {
   return {
+    ...photoOf(photos, 'product', p.id),
     id: p.id,
     name: p.name,
     ...(p.brand ? { brand: p.brand } : {}),
@@ -112,12 +129,14 @@ function toProduct(p: StoredProduct, uid: string): Product {
   };
 }
 
-function toCatalogItem(p: StoredProduct, uid: string): CatalogItem {
+function toCatalogItem(p: StoredProduct, uid: string, photos: PhotoUrls = NO_PHOTOS): CatalogItem {
   return {
+    ...photoOf(photos, 'product', p.id),
     type: 'product',
     id: p.id,
     name: p.name,
     ...(p.brand ? { brand: p.brand } : {}),
+    ...(p.servingSizeG ? { servingSizeG: p.servingSizeG } : {}),
     per100g: p.per100g,
     source: p.source,
     status: p.status,
@@ -151,8 +170,9 @@ function withoutOwner<T extends { ownerId?: string }>(item: T): T {
 const visibleTo = (p: { status: string; ownerId?: string }, uid: string) =>
   p.status === 'approved' || p.ownerId === uid;
 
-function toDish(d: StoredDish, uid: string): Dish {
+function toDish(d: StoredDish, uid: string, photos: PhotoUrls = NO_PHOTOS): Dish {
   return {
+    ...photoOf(photos, 'dish', d.id),
     id: d.id,
     name: d.name,
     ingredients: d.ingredients as DishIngredient[],
@@ -168,8 +188,9 @@ function toDish(d: StoredDish, uid: string): Dish {
   };
 }
 
-function dishItem(d: StoredDish, uid: string): CatalogItem {
+function dishItem(d: StoredDish, uid: string, photos: PhotoUrls = NO_PHOTOS): CatalogItem {
   return {
+    ...photoOf(photos, 'dish', d.id),
     type: 'dish',
     id: d.id,
     name: d.name,
@@ -194,6 +215,30 @@ export function createApp(deps: Deps) {
     return Math.floor(Date.parse(`${date}T00:00:00Z`) / 1000) + historyDays * 86_400;
   };
   const today = () => nowIso().slice(0, 10);
+
+  /** Every photo the caller has added: one query on their own partition. */
+  async function photoUrls(uid: string): Promise<PhotoUrls> {
+    const store = deps.photos;
+    if (!store) return NO_PHOTOS;
+    const list = await repo.listPhotos(uid);
+    return new Map(list.map((p) => [photoRef(p.type, p.itemId), store.url(p.key)]));
+  }
+
+  async function photoUrlOf(uid: string, type: ItemType, id: string): Promise<PhotoUrls> {
+    const store = deps.photos;
+    if (!store) return NO_PHOTOS;
+    const p = await repo.getPhoto(uid, type, id);
+    return p ? new Map([[photoRef(type, id), store.url(p.key)]]) : NO_PHOTOS;
+  }
+
+  async function dropPhoto(uid: string, type: ItemType, id: string) {
+    const store = deps.photos;
+    if (!store) return;
+    const p = await repo.getPhoto(uid, type, id);
+    if (!p) return;
+    await repo.deletePhoto(uid, type, id);
+    await store.remove(p.key);
+  }
 
   /** Looks a product up locally, then in Open Food Facts for `off-<ean>` ids (cached on first use). */
   async function resolveProduct(id: string, uid: string): Promise<StoredProduct> {
@@ -418,15 +463,15 @@ export function createApp(deps: Deps) {
   // ---- catalog ----
   async function recents(uid: string): Promise<CatalogItem[]> {
     const w = recentsWindow(today());
-    const entries = await repo.listEntries(uid, w.from, w.to);
+    const [entries, photos] = await Promise.all([repo.listEntries(uid, w.from, w.to), photoUrls(uid)]);
     const items = await Promise.all(
       deriveRecents(entries).map(async (r): Promise<CatalogItem | null> => {
         if (r.type === 'dish') {
           const d = await repo.getDish(r.id);
-          return d && visibleTo(d, uid) ? dishItem(d, uid) : null;
+          return d && visibleTo(d, uid) ? dishItem(d, uid, photos) : null;
         }
         const p = await repo.getProduct(r.id);
-        return p && visibleTo(p, uid) ? toCatalogItem(p, uid) : null;
+        return p && visibleTo(p, uid) ? toCatalogItem(p, uid, photos) : null;
       }),
     );
     return items.filter((i): i is CatalogItem => i !== null);
@@ -439,14 +484,15 @@ export function createApp(deps: Deps) {
     const q = parse(SearchQuerySchema, c.req.query());
     const query = q.q.trim();
     if (!query) return c.json({ items: await recents(uid) });
-    const [ownDishes, shared] = await Promise.all([
+    const [ownDishes, shared, photos] = await Promise.all([
       q.type === 'product' ? Promise.resolve([]) : repo.listOwnDishes(uid),
       repo.listCatalog('approved'),
+      photoUrls(uid),
     ]);
     const othersDishes = q.type === 'product' ? [] : shared.dishes.filter((d) => d.ownerId !== uid);
     const dishes = [...ownDishes, ...othersDishes]
       .filter((d) => matchesAllPrefixes(d.name, query))
-      .map((d) => dishItem(d, uid));
+      .map((d) => dishItem(d, uid, photos));
     if (q.type === 'dish') return c.json({ items: dishes });
 
     const barcode = /^\d{8,14}$/.test(query) ? normalizeBarcode(query) : undefined;
@@ -465,8 +511,8 @@ export function createApp(deps: Deps) {
     const now = nowIso();
     const items = [
       ...dishes,
-      ...mine.map((p) => toCatalogItem(p, uid)),
-      ...remote.map((o) => toCatalogItem(offToStored(o, now), uid)),
+      ...mine.map((p) => toCatalogItem(p, uid, photos)),
+      ...remote.map((o) => toCatalogItem(offToStored(o, now), uid, photos)),
     ];
     return c.json({ items: items.slice(0, 40) });
   });
@@ -477,16 +523,20 @@ export function createApp(deps: Deps) {
     if (!barcode) return fail('VALIDATION', 'Invalid barcode');
     const local = (await repo.findByBarcode(barcode)).filter((p) => visibleTo(p, uid));
     const pick = local.find((p) => p.status === 'approved') ?? local[0];
-    if (pick) return c.json(toProduct(pick, uid));
-    return c.json(toProduct(await resolveProduct(offId(barcode), uid), uid));
+    const found = pick ?? (await resolveProduct(offId(barcode), uid));
+    return c.json(toProduct(found, uid, await photoUrlOf(uid, 'product', found.id)));
   });
 
   app.get('/me/items', async (c) => {
     const uid = c.get('user').sub;
-    const [products, dishes] = await Promise.all([repo.listOwnProducts(uid), repo.listOwnDishes(uid)]);
+    const [products, dishes, photos] = await Promise.all([
+      repo.listOwnProducts(uid),
+      repo.listOwnDishes(uid),
+      photoUrls(uid),
+    ]);
     return c.json({
-      products: products.map((p) => toProduct(p, uid)),
-      dishes: dishes.map((d) => toDish(d, uid)),
+      products: products.map((p) => toProduct(p, uid, photos)),
+      dishes: dishes.map((d) => toDish(d, uid, photos)),
     });
   });
 
@@ -514,8 +564,8 @@ export function createApp(deps: Deps) {
 
   app.get('/products/:id', async (c) => {
     const uid = c.get('user').sub;
-    const id = parse(ProductIdSchema, c.req.param('id'));
-    return c.json(toProduct(await resolveProduct(id, uid), uid));
+    const p = await resolveProduct(parse(ProductIdSchema, c.req.param('id')), uid);
+    return c.json(toProduct(p, uid, await photoUrlOf(uid, 'product', p.id)));
   });
 
   async function ownProduct(id: string, uid: string): Promise<StoredProduct> {
@@ -543,7 +593,7 @@ export function createApp(deps: Deps) {
       per100g: req.per100g,
     };
     await repo.putProduct(updated);
-    return c.json(toProduct(updated, uid));
+    return c.json(toProduct(updated, uid, await photoUrlOf(uid, 'product', updated.id)));
   });
 
   app.delete('/products/:id', async (c) => {
@@ -551,6 +601,7 @@ export function createApp(deps: Deps) {
     const p = await ownProduct(c.req.param('id'), uid);
     if (p.status === 'approved') return fail('CONFLICT', 'Published products cannot be deleted');
     await repo.deleteProduct(p.id);
+    await dropPhoto(uid, 'product', p.id);
     return c.body(null, 204);
   });
 
@@ -573,7 +624,8 @@ export function createApp(deps: Deps) {
 
   app.get('/dishes/:id', async (c) => {
     const uid = c.get('user').sub;
-    return c.json(toDish(await resolveDish(parse(UlidSchema, c.req.param('id')), uid), uid));
+    const d = await resolveDish(parse(UlidSchema, c.req.param('id')), uid);
+    return c.json(toDish(d, uid, await photoUrlOf(uid, 'dish', d.id)));
   });
 
   async function ownDish(id: string, uid: string): Promise<StoredDish> {
@@ -596,7 +648,7 @@ export function createApp(deps: Deps) {
       ...(await buildDishContent(uid, req)),
     };
     await repo.putDish(updated);
-    return c.json(toDish(updated, uid));
+    return c.json(toDish(updated, uid, await photoUrlOf(uid, 'dish', updated.id)));
   });
 
   app.delete('/dishes/:id', async (c) => {
@@ -604,6 +656,43 @@ export function createApp(deps: Deps) {
     const d = await ownDish(c.req.param('id'), uid);
     if (d.status === 'approved') return fail('CONFLICT', 'Published dishes cannot be deleted');
     await repo.deleteDish(d.id);
+    await dropPhoto(uid, 'dish', d.id);
+    return c.body(null, 204);
+  });
+
+  // ---- photos: one personal photo per product or dish, e.g. a cookie on a kitchen scale ----
+  const photoStore = (): PhotoStore =>
+    deps.photos ?? fail('UPSTREAM_UNAVAILABLE', 'photos are not configured');
+
+  app.post('/photos/uploads', async (c) => {
+    const store = photoStore();
+    return c.json(await store.presignUpload(c.get('user').sub, ulid(clock().getTime())));
+  });
+
+  app.put('/photos/:type{product|dish}/:id', async (c) => {
+    const store = photoStore();
+    const uid = c.get('user').sub;
+    const type = c.req.param('type') as ItemType;
+    const { key } = parse(AttachPhotoRequestSchema, await c.req.json().catch(() => null));
+    if (!key.startsWith(`uploads/${uid}/`)) return fail('FORBIDDEN', 'not your upload');
+    const item =
+      type === 'dish'
+        ? await resolveDish(parse(UlidSchema, c.req.param('id')), uid)
+        : await resolveProduct(parse(ProductIdSchema, c.req.param('id')), uid);
+    const previous = await repo.getPhoto(uid, type, item.id);
+    if (!previous && (await repo.listPhotos(uid)).length >= PHOTOS_PER_USER_MAX) {
+      return fail('QUOTA_EXCEEDED', 'photo limit reached', { limit: PHOTOS_PER_USER_MAX });
+    }
+    const stored = await store.attach(key, uid, ulid(clock().getTime()));
+    await repo.putPhoto(uid, { type, itemId: item.id, key: stored, updatedAt: nowIso() });
+    if (previous) await store.remove(previous.key);
+    const body: PhotoResponse = { photoUrl: store.url(stored) };
+    return c.json(body);
+  });
+
+  app.delete('/photos/:type{product|dish}/:id', async (c) => {
+    photoStore();
+    await dropPhoto(c.get('user').sub, c.req.param('type') as ItemType, c.req.param('id'));
     return c.body(null, 204);
   });
 
@@ -739,6 +828,7 @@ export function createApp(deps: Deps) {
       else await repo.putDish(withoutOwner(d));
     }
     await repo.deleteUserData(uid);
+    await deps.photos?.removeAll(uid);
     return c.body(null, 204);
   });
 

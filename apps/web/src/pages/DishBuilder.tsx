@@ -8,6 +8,7 @@ import { ErrorNote, Header, MacroLine, ShareSwitch, Sheet, kcalText } from '../c
 import { grams, kcal } from '../format';
 import { tr } from '../i18n';
 import { navigate, useLocation } from '../router';
+import { ItemPhoto } from '../ItemPhoto';
 
 type Row = { productId: string; name: string; per100g: Nutrients; grams: string };
 const num = (s: string) => Number(s.replace(',', '.'));
@@ -78,6 +79,12 @@ export function DishBuilderPage() {
           <span className="ot-label">{tr('Назва')}</span>
           <input className="ot-input" value={name} onChange={(e) => setName(e.target.value)} placeholder={tr('Наприклад, Сирники')} />
         </label>
+        {id && existing.data && (
+          <div className="ot-card">
+            <span className="ot-label">{tr('Фото страви')}</span>
+            <ItemPhoto type="dish" id={id} name={existing.data.name} url={existing.data.photoUrl} />
+          </div>
+        )}
         <section className="flex flex-col gap-2">
           <h2 className="ot-h3 px-1">{tr('Інгредієнти')}</h2>
           <div className="ot-list">

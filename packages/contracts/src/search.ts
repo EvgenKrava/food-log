@@ -16,11 +16,15 @@ export const CatalogItemSchema = z.object({
   id: z.string(),
   name: z.string(),
   brand: z.string().optional(),
+  /** Weight of one serving or piece, so the add sheet can offer it as a one-tap amount. */
+  servingSizeG: z.number().positive().optional(),
   per100g: NutrientsSchema,
   source: ProductSourceSchema,
   status: ModerationStatusSchema,
   isOwn: z.boolean(),
   isFavorite: z.boolean(),
+  /** The caller's own photo of this item, if they added one. */
+  photoUrl: z.url().optional(),
 });
 export type CatalogItem = z.infer<typeof CatalogItemSchema>;
 

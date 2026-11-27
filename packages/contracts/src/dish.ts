@@ -51,6 +51,8 @@ export const DishSchema = DishContentSchema.extend({
   isOwn: z.boolean(),
   rejectReason: z.string().optional(),
   pendingRevision: DishContentSchema.optional(),
+  /** The caller's own photo of this dish, if they added one. */
+  photoUrl: z.url().optional(),
   createdAt: IsoDateTimeSchema,
   updatedAt: IsoDateTimeSchema,
 });

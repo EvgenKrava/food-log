@@ -8,6 +8,7 @@ import { ErrorNote, Header, MacroLine, Skeleton } from '../components';
 import { kcal, localDate } from '../format';
 import { navigate, useLocation } from '../router';
 import { GramsSheet, type Pickable } from './GramsSheet';
+import { PhotoThumb } from '../ItemPhoto';
 
 const Scanner = lazy(() => import('./Scanner').then((m) => ({ default: m.Scanner })));
 
@@ -65,6 +66,7 @@ export function AddPage() {
           {results.isLoading && <><Skeleton /><Skeleton /><Skeleton /></>}
           {results.data?.items.map((item) => (
             <button key={item.id} className="ot-row text-left" onClick={() => setPicked(item)}>
+              {item.photoUrl && <PhotoThumb url={item.photoUrl} alt={item.name} />}
               <span className="ot-row__body">
                 <span className="ot-row__title">{item.name}</span>
                 <span className="ot-row__sub ot-num">

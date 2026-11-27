@@ -6,8 +6,9 @@ import { tr } from '../i18n';
 import { api } from '../api';
 import { ErrorNote, MacroLine, Sheet, kcalText } from '../components';
 import { mealLabel } from '../format';
+import { ItemPhoto } from '../ItemPhoto';
 
-export type Pickable = { type?: 'product' | 'dish'; id: string; name: string; brand?: string; per100g: Nutrients; servingSizeG?: number };
+export type Pickable = { type?: 'product' | 'dish'; id: string; name: string; brand?: string; per100g: Nutrients; servingSizeG?: number; photoUrl?: string };
 
 export function GramsSheet({
   item,
@@ -39,6 +40,7 @@ export function GramsSheet({
   const n = scaleNutrients(item.per100g, valid ? g : 0);
   return (
     <Sheet title={item.brand ? `${item.name} · ${item.brand}` : item.name} onClose={onClose}>
+      <ItemPhoto type={item.type ?? 'product'} id={item.id} name={item.name} url={item.photoUrl} />
       <p className="ot-caption">{tr('На 100 г')}: {kcalText(item.per100g.kcal)} · <MacroLine n={item.per100g} /></p>
       <label className="ot-field">
         <span className="ot-label">{tr('Скільки грамів')}</span>

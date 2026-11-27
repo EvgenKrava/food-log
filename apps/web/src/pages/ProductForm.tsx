@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Camera } from 'lucide-react';
+import { ArrowLeft, Camera, ImagePlus, X } from 'lucide-react';
 import {
   BarcodeSchema,
   CreateProductRequestSchema,
@@ -61,6 +61,9 @@ export function ProductFormPage() {
   const [warnings, setWarnings] = useState<DraftWarning[]>([]);
   const [share, setShare] = useState(false);
   const photoInput = useRef<HTMLInputElement>(null);
+  const itemPhotoInput = useRef<HTMLInputElement>(null);
+  const [itemPhoto, setItemPhoto] = useState<{ file: File; preview: string } | null>(null);
+  useEffect(() => () => { if (itemPhoto) URL.revokeObjectURL(itemPhoto.preview); }, [itemPhoto]);
 
   const scan = useMutation({
     mutationFn: async (file: File) => {
@@ -98,9 +101,13 @@ export function ProductFormPage() {
   const mismatch = parsed.success && hasKcalMismatch(parsed.data.per100g);
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!parsed.success) throw new Error(tr('Перевірте поля'));
-      return api.createProduct(parsed.data);
+      const p = await api.createProduct(parsed.data);
+      if (!itemPhoto) return p;
+      // The product is saved either way; a failed photo can be added again from the product.
+      const photo = await api.setPhoto('product', p.id, itemPhoto.file).catch(() => null);
+      return photo ? { ...p, photoUrl: photo.photoUrl } : p;
     },
     onSuccess: (p) => {
       void qc.invalidateQueries({ queryKey: ['myItems'] });
@@ -174,6 +181,35 @@ export function ProductFormPage() {
             </p>
           )}
           {field('serving', tr('Порція, г (необовʼязково)'), { decimal: true })}
+        </div>
+        <div className="ot-card">
+          <span className="ot-label">{tr('Фото (необовʼязково)')}</span>
+          <input
+            ref={itemPhotoInput}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) setItemPhoto({ file, preview: URL.createObjectURL(file) });
+            }}
+          />
+          {itemPhoto ? (
+            <div className="fl-photo">
+              <span className="fl-photo__img"><img src={itemPhoto.preview} alt={f.name} /></span>
+              <button type="button" className="ot-btn ot-btn--ghost ot-btn--sm self-start" onClick={() => setItemPhoto(null)}>
+                <X className="ot-icon" />
+                {tr('Прибрати фото')}
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="ot-btn ot-btn--soft ot-btn--sm self-start" onClick={() => itemPhotoInput.current?.click()}>
+              <ImagePlus className="ot-icon" />
+              {tr('Додати фото')}
+            </button>
+          )}
+          <span className="ot-hint">{tr('Наприклад, одне печиво на вагах: наступного разу одразу видно, скільки грамів записати.')}</span>
         </div>
         <div className="ot-card">
           <ShareSwitch checked={share} onChange={setShare} />
